@@ -61,6 +61,7 @@ static int current_width = -1;
 static int current_height = -1;
 static int current_fmt = 0;
 static int current_rotate = 0;
+static int current_fd;
 static int capture = 0;
 static cairo_surface_t *surface = NULL;
 static int preview_width = -1;
@@ -190,6 +191,20 @@ init_mmap(int fd)
 	}
 }
 
+static int
+v4l2_ctrl_set(int fd, uint32_t id, int val)
+{
+	struct v4l2_control ctrl = {0};
+	ctrl.id = id;
+	ctrl.value = val;
+
+	if(xioctl(fd, VIDIOC_S_CTRL, &ctrl) == -1){
+		g_printerr("Failed to set control %d to %d", id, val);
+		return -1;
+	}
+	return 0;
+}
+
 static void
 init_sensor(char* fn, int width, int height, int mbus)
 {
@@ -213,7 +228,10 @@ init_sensor(char* fn, int width, int height, int mbus)
 	g_printerr("Driver returned %dx%d fmt %d\n",
 	fmt.format.width, fmt.format.height,
 	fmt.format.code);
-	close(fd);
+
+	v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
+	close(current_fd);
+	current_fd = fd;
 }
 
 static void
@@ -551,6 +569,9 @@ get_frame(int fd)
 	}
 	return TRUE;
 }
+
+
+
 
 static int
 config_ini_handler(void *user, const char *section, const char *name,
