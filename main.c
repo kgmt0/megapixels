@@ -44,7 +44,7 @@ xioctl(int fd, int request, void *arg)
 static void
 errno_exit(const char *s)
 {
-	fprintf(stderr, "%s error %d, %s\\n", s, errno, strerror(errno));
+	fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
 	exit(EXIT_FAILURE);
 }
 
@@ -392,9 +392,21 @@ config_ini_handler(void *user, const char *section, const char *name,
 		} else if (strcmp(name, "height") == 0) {
 			preview_height = strtol(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
+			if (strcmp(value, "RGB") == 0){
+				preview_fmt = V4L2_PIX_FMT_RGB24;
+			} else if (strcmp(value, "UYVY8") == 0) {
+				preview_fmt = V4L2_PIX_FMT_UYVY;
+			} else if (strcmp(value, "JPEG") == 0) {
+				preview_fmt = V4L2_PIX_FMT_JPEG;
+			} else if (strcmp(value, "NV12") == 0) {
+				preview_fmt = V4L2_PIX_FMT_NV12;
+			} else {
+				g_printerr("Unsupported pixelformat %s\n", value);
+				exit(1);
+			}
 			preview_fmt = strtol(value, NULL, 10);
 		} else {
-			g_printerr("Unknown key '%s' in [preview]", name);
+			g_printerr("Unknown key '%s' in [preview]\n", name);
 			exit(1);
 		}
 	} else if (strcmp(section, "device") == 0) {
@@ -403,11 +415,11 @@ config_ini_handler(void *user, const char *section, const char *name,
 		} else if (strcmp(name, "front") == 0) {
 			front_dev_name = strdup(value);
 		} else {
-			g_printerr("Unknown key '%s' in [device]", name);
+			g_printerr("Unknown key '%s' in [device]\n", name);
 			exit(1);
 		}
 	} else {
-		g_printerr("Unknown section '%s' in config file", section);
+		g_printerr("Unknown section '%s' in config file\n", section);
 		exit(1);
 	}
 	return 1;
