@@ -219,7 +219,7 @@ init_device(int fd)
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
 	if (preview_width > 0) {
-		g_printerr("Setting camera to %dx%d fmt %d",
+		g_printerr("Setting camera to %dx%d fmt %d\n",
 				preview_width, preview_height, preview_fmt);
 		fmt.fmt.pix.width = preview_width;
 		fmt.fmt.pix.height = preview_height;
@@ -230,19 +230,19 @@ init_device(int fd)
 			errno_exit("VIDIOC_S_FMT");
 		}
 
-		g_printerr("Driver returned %dx%d fmt %d",
+		g_printerr("Driver returned %dx%d fmt %d\n",
 				   fmt.fmt.pix.width, fmt.fmt.pix.height,
 				   fmt.fmt.pix.pixelformat);
 
 
 		/* Note VIDIOC_S_FMT may change width and height. */
 	} else {
-		g_printerr("Querying camera format");
+		g_printerr("Querying camera format\n");
 		/* Preserve original settings as set by v4l2-ctl for example */
 		if (xioctl(fd, VIDIOC_G_FMT, &fmt) == -1) {
 			errno_exit("VIDIOC_G_FMT");
 		}
-		g_printerr("Driver returned %dx%d fmt %d",
+		g_printerr("Driver returned %dx%d fmt %d\n",
 				   fmt.fmt.pix.width, fmt.fmt.pix.height,
 				   fmt.fmt.pix.pixelformat);
 
@@ -423,7 +423,6 @@ config_ini_handler(void *user, const char *section, const char *name,
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
 			}
-			preview_fmt = strtol(value, NULL, 10);
 		} else {
 			g_printerr("Unknown key '%s' in [preview]\n", name);
 			exit(1);
