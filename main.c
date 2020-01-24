@@ -400,6 +400,13 @@ config_ini_handler(void *user, const char *section, const char *name,
 				preview_fmt = V4L2_PIX_FMT_JPEG;
 			} else if (strcmp(value, "NV12") == 0) {
 				preview_fmt = V4L2_PIX_FMT_NV12;
+			} else if (strcmp(value, "YUV420") == 0
+					|| strcmp(value, "I420") == 0
+					|| strcmp(value, "YU12") == 0) {
+				preview_fmt = V4L2_PIX_FMT_YUV420;
+			} else if (strcmp(value, "YVU420") == 0
+					   || strcmp(value, "YV12") == 0) {
+				preview_fmt = V4L2_PIX_FMT_YVU420;
 			} else {
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
