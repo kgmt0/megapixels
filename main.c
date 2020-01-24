@@ -219,21 +219,33 @@ init_device(int fd)
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
 	if (preview_width > 0) {
+		g_printerr("Setting camera to %dx%d fmt %d",
+				preview_width, preview_height, preview_fmt);
 		fmt.fmt.pix.width = preview_width;
 		fmt.fmt.pix.height = preview_height;
 		fmt.fmt.pix.pixelformat = preview_fmt;
-		fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
+		fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
 		if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1) {
 			errno_exit("VIDIOC_S_FMT");
 		}
 
+		g_printerr("Driver returned %dx%d fmt %d",
+				   fmt.fmt.pix.width, fmt.fmt.pix.height,
+				   fmt.fmt.pix.pixelformat);
+
+
 		/* Note VIDIOC_S_FMT may change width and height. */
 	} else {
+		g_printerr("Querying camera format");
 		/* Preserve original settings as set by v4l2-ctl for example */
 		if (xioctl(fd, VIDIOC_G_FMT, &fmt) == -1) {
 			errno_exit("VIDIOC_G_FMT");
 		}
+		g_printerr("Driver returned %dx%d fmt %d",
+				   fmt.fmt.pix.width, fmt.fmt.pix.height,
+				   fmt.fmt.pix.pixelformat);
+
 	}
 
 	/* Buggy driver paranoia. */
