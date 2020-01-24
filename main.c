@@ -436,7 +436,11 @@ main(int argc, char *argv[])
 	GError *error = NULL;
 	gtk_init(&argc, &argv);
 	GtkBuilder *builder = gtk_builder_new();
-	if (gtk_builder_add_from_file(builder, "camera.glade", &error) == 0) {
+	char* glade_file = "/usr/share/camera/ui/camera.glade";
+	if (access( "camera.glade", F_OK) != -1) {
+		glade_file = "camera.glade";
+	}
+	if (gtk_builder_add_from_file(builder, glade_file, &error) == 0) {
 		g_printerr("Error loading file: %s\n", error->message);
 		g_clear_error(&error);
 		return 1;
@@ -448,7 +452,11 @@ main(int argc, char *argv[])
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
-	gtk_css_provider_load_from_path(provider, "camera.css", NULL);
+	if (access( "camera.css", F_OK) != -1) {
+		gtk_css_provider_load_from_path(provider, "camera.css", NULL);
+	} else {
+		gtk_css_provider_load_from_path(provider, "/usr/share/camera/ui/camera.css", NULL);
+	}
 	GtkStyleContext *context = gtk_widget_get_style_context(preview_box);
 	gtk_style_context_add_provider(context,
 			GTK_STYLE_PROVIDER(provider),
