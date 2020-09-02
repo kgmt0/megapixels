@@ -15,5 +15,5 @@ LINK_DIRECTORIES(${GTK3_LIBRARY_DIRS})
 # Add other flags to the compiler
 ADD_DEFINITIONS(${GTK3_CFLAGS_OTHER})
 
-add_executable(GTKCamera main.c ini.c ini.h)
+add_executable(GTKCamera main.c ini.c ini.h bayer.c bayer.h)
 target_link_libraries(GTKCamera ${GTK3_LIBRARIES})

@@ -1,11 +1,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/videodev2.h>
+#include <linux/media.h>
+#include <linux/v4l2-subdev.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <linux/kdev_t.h>
+#include <sys/sysmacros.h>
 #include <asm/errno.h>
 #include <gtk/gtk.h>
 #include "ini.h"
+#include "bayer.h"
 
 enum io_method {
 	IO_METHOD_READ,
@@ -21,14 +28,40 @@ struct buffer {
 struct buffer *buffers;
 static int *outbuffer;
 static unsigned int n_buffers;
-static char *rear_dev_name;
-static char *front_dev_name;
-static char *dev_name;
 static enum io_method io = IO_METHOD_MMAP;
 
-static int preview_width = -1;
-static int preview_height = -1;
-static int preview_fmt = V4L2_PIX_FMT_RGB24;
+// Rear camera
+static char *rear_dev_name;
+static int  *rear_entity_id;
+static char *rear_dev[20];
+static int  rear_width = -1;
+static int  rear_height = -1;
+static int  rear_rotate = 0;
+static int  rear_fmt = V4L2_PIX_FMT_RGB24;
+static int  rear_mbus = MEDIA_BUS_FMT_RGB888_1X24;
+
+// Front camera
+static char *front_dev_name;
+static int  *front_entity_id;
+static char *front_dev[20];
+static int  front_width = -1;
+static int  front_height = -1;
+static int  front_rotate = 0;
+static int  front_fmt = V4L2_PIX_FMT_RGB24;
+static int  front_mbus = MEDIA_BUS_FMT_RGB888_1X24;
+
+// Camera interface
+static char *media_drv_name;
+static int  *interface_entity_id;
+static char *dev_name[20];
+static int media_fd;
+
+// State
+static int current_width = -1;
+static int current_height = -1;
+static int current_fmt = 0;
+static int current_rotate = 0;
+static int capture = 0;
 
 GObject *preview_image;
 
@@ -154,6 +187,32 @@ init_mmap(int fd)
 }
 
 static void
+init_sensor(char* fn, int width, int height, int mbus)
+{
+	int fd;
+	struct v4l2_subdev_format fmt;
+	fd = open(fn, O_RDWR);
+
+	g_printerr("Setting sensor to %dx%d fmt %d\n",
+		width, height, mbus);
+	fmt.pad = 0;
+	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	fmt.format.code = mbus;
+	fmt.format.width = width;
+	fmt.format.height = height;
+	fmt.format.field = V4L2_FIELD_ANY;
+
+	if (xioctl(fd, VIDIOC_SUBDEV_S_FMT, &fmt) == -1) {
+		errno_exit("VIDIOC_SUBDEV_S_FMT");
+	}
+
+	g_printerr("Driver returned %dx%d fmt %d\n",
+	fmt.format.width, fmt.format.height,
+	fmt.format.code);
+	close(fd);
+}
+
+static void
 init_device(int fd)
 {
 	struct v4l2_capability cap;
@@ -219,12 +278,12 @@ init_device(int fd)
 	struct v4l2_format fmt = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
-	if (preview_width > 0) {
+	if (current_width > 0) {
 		g_printerr("Setting camera to %dx%d fmt %d\n",
-			preview_width, preview_height, preview_fmt);
-		fmt.fmt.pix.width = preview_width;
-		fmt.fmt.pix.height = preview_height;
-		fmt.fmt.pix.pixelformat = preview_fmt;
+			current_width, current_height, current_fmt);
+		fmt.fmt.pix.width = current_width;
+		fmt.fmt.pix.height = current_height;
+		fmt.fmt.pix.pixelformat = current_fmt;
 		fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
 		if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1) {
@@ -246,10 +305,10 @@ init_device(int fd)
 		g_printerr("Driver returned %dx%d fmt %d\n",
 			fmt.fmt.pix.width, fmt.fmt.pix.height,
 			fmt.fmt.pix.pixelformat);
-		preview_width = fmt.fmt.pix.width;
-		preview_height = fmt.fmt.pix.height;
+		current_width = fmt.fmt.pix.width;
+		current_height = fmt.fmt.pix.height;
 	}
-	preview_fmt = fmt.fmt.pix.pixelformat;
+	current_fmt = fmt.fmt.pix.pixelformat;
 
 	/* Buggy driver paranoia. */
 	unsigned int min = fmt.fmt.pix.width * 2;
@@ -279,11 +338,54 @@ init_device(int fd)
 static void
 process_image(const int *p, int size)
 {
-	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_data(p, GDK_COLORSPACE_RGB,
-		FALSE, 8, 640, 480, 2 * 640,
-		NULL, NULL);
-	gtk_image_set_from_pixbuf(preview_image, pixbuf
-	);
+	clock_t t;
+	time_t rawtime;
+	uint8_t *pixels;
+	double time_taken;
+	char fname[255];
+	GdkPixbuf *pixbuf;
+	GdkPixbuf *pixbufrot;
+	GError *error = NULL;
+	t = clock();
+
+	dc1394bayer_method_t method = DC1394_BAYER_METHOD_DOWNSAMPLE;
+	dc1394color_filter_t filter = DC1394_COLOR_FILTER_BGGR;
+
+	if(capture){
+		method = DC1394_BAYER_METHOD_SIMPLE;
+		// method = DC1394_BAYER_METHOD_VNG is slightly sharper but takes 10 seconds;
+		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width, current_height);
+	}else{
+		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width/2, current_height/2);
+	}
+
+	pixels = gdk_pixbuf_get_pixels(pixbuf);
+	dc1394_bayer_decoding_8bit((const uint8_t*)p, pixels, current_width, current_height, filter, method);
+	if (current_rotate == 0) {
+		pixbufrot = pixbuf;
+	} else if (current_rotate == 90) {
+		pixbufrot = gdk_pixbuf_rotate_simple(pixbuf, GDK_PIXBUF_ROTATE_COUNTERCLOCKWISE);
+	} else if (current_rotate == 180) {
+		pixbufrot = gdk_pixbuf_rotate_simple(pixbuf, GDK_PIXBUF_ROTATE_UPSIDEDOWN);
+	} else if (current_rotate == 270) {
+		pixbufrot = gdk_pixbuf_rotate_simple(pixbuf, GDK_PIXBUF_ROTATE_CLOCKWISE);
+	}
+	if (capture){
+		time(&rawtime);
+		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), ctime(&rawtime));
+		printf("Saving image\n");
+		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "85", NULL);
+		if(error != NULL) {
+			g_printerr(error->message);
+			g_clear_error(&error);
+		}
+	} else {
+		gtk_image_set_from_pixbuf(preview_image, pixbufrot);
+	}
+	capture = 0;
+	t = clock() - t;
+	time_taken = ((double)t)/CLOCKS_PER_SEC;
+	printf("%f fps\n", 1.0/time_taken);
 }
 
 static int
@@ -405,42 +507,97 @@ static int
 config_ini_handler(void *user, const char *section, const char *name,
 	const char *value)
 {
-	if (strcmp(section, "preview") == 0) {
+	if (strcmp(section, "rear") == 0) {
 		if (strcmp(name, "width") == 0) {
-			preview_width = strtol(value, NULL, 10);
+			rear_width = strtol(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
-			preview_height = strtol(value, NULL, 10);
+			rear_height = strtol(value, NULL, 10);
+		} else if (strcmp(name, "rotate") == 0) {
+			rear_rotate = strtol(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
 			if (strcmp(value, "RGB") == 0) {
-				preview_fmt = V4L2_PIX_FMT_RGB24;
+				rear_fmt = V4L2_PIX_FMT_RGB24;
 			} else if (strcmp(value, "UYVY") == 0) {
-				preview_fmt = V4L2_PIX_FMT_UYVY;
+				rear_fmt = V4L2_PIX_FMT_UYVY;
 			} else if (strcmp(value, "YUYV") == 0) {
-				preview_fmt = V4L2_PIX_FMT_YUYV;
+				rear_fmt = V4L2_PIX_FMT_YUYV;
 			} else if (strcmp(value, "JPEG") == 0) {
-				preview_fmt = V4L2_PIX_FMT_JPEG;
+				rear_fmt = V4L2_PIX_FMT_JPEG;
 			} else if (strcmp(value, "NV12") == 0) {
-				preview_fmt = V4L2_PIX_FMT_NV12;
+				rear_fmt = V4L2_PIX_FMT_NV12;
 			} else if (strcmp(value, "YUV420") == 0
 				|| strcmp(value, "I420") == 0
 				|| strcmp(value, "YU12") == 0) {
-				preview_fmt = V4L2_PIX_FMT_YUV420;
+				rear_fmt = V4L2_PIX_FMT_YUV420;
 			} else if (strcmp(value, "YVU420") == 0
 				|| strcmp(value, "YV12") == 0) {
-				preview_fmt = V4L2_PIX_FMT_YVU420;
+				rear_fmt = V4L2_PIX_FMT_YVU420;
+			} else if (strcmp(value, "RGGB8") == 0) {
+				rear_fmt = V4L2_PIX_FMT_SRGGB8;
+			} else if (strcmp(value, "BGGR8") == 0) {
+				rear_fmt = V4L2_PIX_FMT_SBGGR8;
+				rear_mbus = MEDIA_BUS_FMT_SBGGR8_1X8;
+			} else if (strcmp(value, "GRBG8") == 0) {
+				rear_fmt = V4L2_PIX_FMT_SGRBG8;
+			} else if (strcmp(value, "GBRG8") == 0) {
+				rear_fmt = V4L2_PIX_FMT_SGBRG8;
 			} else {
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
 			}
+		} else if (strcmp(name, "driver") == 0){
+			rear_dev_name = strdup(value);
 		} else {
-			g_printerr("Unknown key '%s' in [preview]\n", name);
+			g_printerr("Unknown key '%s' in [rear]\n", name);
+			exit(1);
+		}
+	} else if (strcmp(section, "front") == 0) {
+		if (strcmp(name, "width") == 0) {
+			front_width = strtol(value, NULL, 10);
+		} else if (strcmp(name, "height") == 0) {
+			front_height = strtol(value, NULL, 10);
+		} else if (strcmp(name, "rotate") == 0) {
+			front_rotate = strtol(value, NULL, 10);
+		} else if (strcmp(name, "fmt") == 0) {
+			if (strcmp(value, "RGB") == 0) {
+				front_fmt = V4L2_PIX_FMT_RGB24;
+			} else if (strcmp(value, "UYVY") == 0) {
+				front_fmt = V4L2_PIX_FMT_UYVY;
+			} else if (strcmp(value, "YUYV") == 0) {
+				front_fmt = V4L2_PIX_FMT_YUYV;
+			} else if (strcmp(value, "JPEG") == 0) {
+				front_fmt = V4L2_PIX_FMT_JPEG;
+			} else if (strcmp(value, "NV12") == 0) {
+				front_fmt = V4L2_PIX_FMT_NV12;
+			} else if (strcmp(value, "YUV420") == 0
+				|| strcmp(value, "I420") == 0
+				|| strcmp(value, "YU12") == 0) {
+				front_fmt = V4L2_PIX_FMT_YUV420;
+			} else if (strcmp(value, "YVU420") == 0
+				|| strcmp(value, "YV12") == 0) {
+				front_fmt = V4L2_PIX_FMT_YVU420;
+			} else if (strcmp(value, "RGGB8") == 0) {
+				front_fmt = V4L2_PIX_FMT_SRGGB8;
+			} else if (strcmp(value, "BGGR8") == 0) {
+				front_fmt = V4L2_PIX_FMT_SBGGR8;
+				front_mbus = MEDIA_BUS_FMT_SBGGR8_1X8;
+			} else if (strcmp(value, "GRBG8") == 0) {
+				front_fmt = V4L2_PIX_FMT_SGRBG8;
+			} else if (strcmp(value, "GBRG8") == 0) {
+				front_fmt = V4L2_PIX_FMT_SGBRG8;
+			} else {
+				g_printerr("Unsupported pixelformat %s\n", value);
+				exit(1);
+			}
+		} else if (strcmp(name, "driver") == 0){
+			front_dev_name = strdup(value);
+		} else {
+			g_printerr("Unknown key '%s' in [front]\n", name);
 			exit(1);
 		}
 	} else if (strcmp(section, "device") == 0) {
-		if (strcmp(name, "rear") == 0) {
-			rear_dev_name = strdup(value);
-		} else if (strcmp(name, "front") == 0) {
-			front_dev_name = strdup(value);
+		if (strcmp(name, "csi") == 0) {
+			media_drv_name = strdup(value);
 		} else {
 			g_printerr("Unknown key '%s' in [device]\n", name);
 			exit(1);
@@ -450,6 +607,173 @@ config_ini_handler(void *user, const char *section, const char *name,
 		exit(1);
 	}
 	return 1;
+}
+
+int
+find_dev_node(int maj, int min, char* fnbuf)
+{
+	DIR *d;
+	struct dirent *dir;
+	struct stat info;
+	
+	d = opendir("/dev");
+	while ((dir = readdir(d)) != NULL) {
+		sprintf(fnbuf, "/dev/%s", dir->d_name);
+		stat(fnbuf, &info);
+		if (!S_ISCHR(info.st_mode)){
+			continue;
+		}
+		if (major(info.st_rdev) == maj && minor(info.st_rdev) == min) {
+			return 0;
+		}
+	}
+	return -1;
+}
+
+int
+setup_rear()
+{
+	struct media_link_desc link = {0};
+
+	// Disable the interface<->front link
+	link.flags = 0;
+	link.source.entity = front_entity_id;
+	link.source.index = 0;
+	link.sink.entity = interface_entity_id;
+	link.sink.index = 0;
+
+	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+		g_printerr("Could not disable front camera link\n");
+		return -1;
+	}
+
+	// Enable the interface<->rear link
+	link.flags = MEDIA_LNK_FL_ENABLED;
+	link.source.entity = rear_entity_id;
+	link.source.index = 0;
+	link.sink.entity = interface_entity_id;
+	link.sink.index = 0;
+
+	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+		g_printerr("Could not enable rear camera link\n");
+		return -1;
+	}
+
+	current_width = rear_width;
+	current_height = rear_height;
+	current_fmt = rear_fmt;
+	current_rotate = rear_rotate;
+	// Find camera node
+	init_sensor(rear_dev, rear_width, rear_height, rear_mbus);
+	return 0;
+}
+
+int
+setup_front()
+{
+	struct media_link_desc link = {0};
+
+	// Disable the interface<->rear link
+	link.flags = 0;
+	link.source.entity = rear_entity_id;
+	link.source.index = 0;
+	link.sink.entity = interface_entity_id;
+	link.sink.index = 0;
+
+	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+		g_printerr("Could not disable front camera link\n");
+		return -1;
+	}
+
+	// Enable the interface<->rear link
+	link.flags = MEDIA_LNK_FL_ENABLED;
+	link.source.entity = front_entity_id;
+	link.source.index = 0;
+	link.sink.entity = interface_entity_id;
+	link.sink.index = 0;
+
+	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+		g_printerr("Could not enable rear camera link\n");
+		return -1;
+	}
+	current_width = front_width;
+	current_height = front_height;
+	current_fmt = front_fmt;
+	current_rotate = front_rotate;
+	// Find camera node
+	init_sensor(front_dev, front_width, front_height, front_mbus);
+	return 0;
+}
+
+int
+find_cameras()
+{
+	struct media_entity_desc entity = {0};
+	int ret;
+	int found = 0;
+
+	while (1) {
+		entity.id = entity.id | MEDIA_ENT_ID_FLAG_NEXT;
+		ret = xioctl(media_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
+		if (ret < 0){
+			break;
+		}
+		printf("At node %s, (0x%x)\n", entity.name, entity.type);
+		if(strncmp(entity.name, front_dev_name, strlen(front_dev_name)) == 0) {
+			front_entity_id = entity.id;
+			find_dev_node(entity.dev.major, entity.dev.minor, front_dev);
+			printf("Found front cam, is %s at %s\n", entity.name, front_dev);
+			found++;
+		}
+		if(strncmp(entity.name, rear_dev_name, strlen(rear_dev_name)) == 0) {
+			rear_entity_id = entity.id;
+			find_dev_node(entity.dev.major, entity.dev.minor, rear_dev);
+			printf("Found rear cam, is %s at %s\n", entity.name, rear_dev);
+			found++;
+		}
+		if (entity.type == MEDIA_ENT_F_IO_V4L) {
+			interface_entity_id = entity.id;
+			find_dev_node(entity.dev.major, entity.dev.minor, dev_name);
+			printf("Found v4l2 interface node at %s\n", dev_name);
+		}
+	}
+	if(found < 2){
+		return -1;
+	}
+	return 0;
+}
+
+
+int
+find_media_fd()
+{
+	DIR *d;
+	struct dirent *dir;
+	int fd;
+	char fnbuf[20];
+	struct media_device_info mdi = {0};
+	d = opendir("/dev");
+	while ((dir = readdir(d)) != NULL) {
+		if(strncmp(dir->d_name, "media", 5) == 0) {
+			sprintf(fnbuf, "/dev/%s", dir->d_name);
+			printf("Checking %s\n", fnbuf);
+			fd = open(fnbuf, O_RDWR);
+			xioctl(fd, MEDIA_IOC_DEVICE_INFO, &mdi);
+			printf("Found media device: %s\n", mdi.driver);
+			if (strcmp(mdi.driver, media_drv_name) == 0){
+				media_fd = fd;
+				return 0;
+			}
+			close(fd);
+		}
+	}
+	return 1;
+}
+
+void
+on_shutter_clicked(GtkWidget *widget, gpointer user_data)
+{
+	capture = 1;
 }
 
 int
@@ -475,8 +799,10 @@ main(int argc, char *argv[])
 
 	GObject *window = gtk_builder_get_object(builder, "window");
 	GObject *preview_box = gtk_builder_get_object(builder, "preview_box");
+	GObject *shutter = gtk_builder_get_object(builder, "shutter");
 	preview_image = gtk_builder_get_object(builder, "preview");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
 	if (access("camera.css", F_OK) != -1) {
@@ -501,7 +827,15 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	dev_name = rear_dev_name;
+	if (find_media_fd() == -1) {
+		g_printerr("Could not find the media node\n");
+		return 1;
+	}
+	if (find_cameras() == -1) {
+		g_printerr("Could not find the cameras\n");
+		return 1;
+	}
+	setup_rear();
 
 	int fd = open(dev_name, O_RDWR);
 	if (fd == -1) {
@@ -513,9 +847,9 @@ main(int argc, char *argv[])
 	start_capturing(fd);
 
 	// Get a new frame every 34ms ~30fps
-	g_timeout_add(34, get_frame, fd);
-
+	printf("window show\n");
 	gtk_widget_show(window);
+	g_idle_add(get_frame, fd);
 	gtk_main();
 	return 0;
 }
