@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(GTKCamera C)
+project(Megapixels C)
 
 set(CMAKE_C_STANDARD 11)
 
@@ -15,5 +15,5 @@ LINK_DIRECTORIES(${GTK3_LIBRARY_DIRS})
 # Add other flags to the compiler
 ADD_DEFINITIONS(${GTK3_CFLAGS_OTHER})
 
-add_executable(GTKCamera main.c ini.c ini.h bayer.c bayer.h)
-target_link_libraries(GTKCamera ${GTK3_LIBRARIES})
+add_executable(megapixels main.c ini.c ini.h bayer.c bayer.h)
+target_link_libraries(megapixels ${GTK3_LIBRARIES})
