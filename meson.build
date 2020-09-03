@@ -7,3 +7,7 @@ install_data(['camera.glade', 'camera.css'],
 
 install_data(['org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
+
+install_data('org.postmarketos.Megapixels.svg',
+  install_dir: join_paths(get_option('datadir'), 'icons/hicolor/scalable/apps')
+)
