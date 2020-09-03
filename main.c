@@ -344,9 +344,11 @@ process_image(const int *p, int size)
 {
 	clock_t t;
 	time_t rawtime;
+	struct tm tim;
 	uint8_t *pixels;
 	double time_taken;
 	char fname[255];
+	char timestamp[30];
 	GdkPixbuf *pixbuf;
 	GdkPixbuf *pixbufrot;
 	GError *error = NULL;
@@ -378,7 +380,9 @@ process_image(const int *p, int size)
 	}
 	if (capture){
 		time(&rawtime);
-		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), ctime(&rawtime));
+		tim =*(localtime(&rawtime));
+		strftime(timestamp, 30, "%F %T", &tim);
+		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), timestamp);
 		printf("Saving image\n");
 		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "85", NULL);
 		if(error != NULL) {
