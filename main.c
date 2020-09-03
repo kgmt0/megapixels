@@ -837,7 +837,7 @@ main(int argc, char *argv[])
 	gtk_init(&argc, &argv);
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
 	GtkBuilder *builder = gtk_builder_new();
-	char *glade_file = "/usr/share/camera/ui/camera.glade";
+	char *glade_file = "/usr/share/megapixels/ui/camera.glade";
 	if (access("camera.glade", F_OK) != -1) {
 		glade_file = "camera.glade";
 	}

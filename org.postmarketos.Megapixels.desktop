@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Megapixels
+Exec=megapixels /etc/megapixels.ini
+Terminal=false
+Type=Application
+Categories=GTK;
+Icon=org.postmarketos.Megapixels
