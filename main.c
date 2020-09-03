@@ -62,8 +62,12 @@ static int current_height = -1;
 static int current_fmt = 0;
 static int current_rotate = 0;
 static int capture = 0;
+static cairo_surface_t *surface = NULL;
+static int preview_width = -1;
+static int preview_height = -1;
 
-GObject *preview_image;
+// Widgets
+GObject *preview;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -142,7 +146,7 @@ init_mmap(int fd)
 	if (xioctl(fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s does not support memory mapping",
-				dev_name);
+				*dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_REQBUFS");
@@ -151,7 +155,7 @@ init_mmap(int fd)
 
 	if (req.count < 2) {
 		fprintf(stderr, "Insufficient buffer memory on %s\n",
-			dev_name);
+			*dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -219,7 +223,7 @@ init_device(int fd)
 	if (xioctl(fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s is no V4L2 device\n",
-				dev_name);
+				*dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_QUERYCAP");
@@ -228,7 +232,7 @@ init_device(int fd)
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 		fprintf(stderr, "%s is no video capture device\n",
-			dev_name);
+			*dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -236,7 +240,7 @@ init_device(int fd)
 		case IO_METHOD_READ:
 			if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
 				fprintf(stderr, "%s does not support read i/o\n",
-					dev_name);
+					*dev_name);
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -244,7 +248,7 @@ init_device(int fd)
 		case IO_METHOD_USERPTR:
 			if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
 				fprintf(stderr, "%s does not support streaming i/o\n",
-					dev_name);
+					*dev_name);
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -346,6 +350,8 @@ process_image(const int *p, int size)
 	GdkPixbuf *pixbuf;
 	GdkPixbuf *pixbufrot;
 	GError *error = NULL;
+	double scale;
+	cairo_t *cr;
 	t = clock();
 
 	dc1394bayer_method_t method = DC1394_BAYER_METHOD_DOWNSAMPLE;
@@ -380,12 +386,51 @@ process_image(const int *p, int size)
 			g_clear_error(&error);
 		}
 	} else {
-		gtk_image_set_from_pixbuf(preview_image, pixbufrot);
+		scale = (double)preview_width/gdk_pixbuf_get_width(pixbufrot);
+		cr = cairo_create(surface);
+		cairo_set_source_rgb(cr, 0,0,0);
+		cairo_paint(cr);
+		gdk_cairo_set_source_pixbuf(cr, pixbufrot, 0, 0);
+		cairo_scale(cr, scale, scale);
+		cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_NONE);
+		cairo_paint(cr);
+		gtk_widget_queue_draw_area(preview, 0, 0, preview_width, preview_height);
 	}
 	capture = 0;
 	t = clock() - t;
 	time_taken = ((double)t)/CLOCKS_PER_SEC;
 	printf("%f fps\n", 1.0/time_taken);
+}
+
+static gboolean
+preview_draw (GtkWidget *widget, cairo_t *cr, gpointer data)
+{
+	cairo_set_source_surface(cr, surface, 0,0);
+	cairo_paint(cr);
+	return FALSE;
+}
+
+static gboolean
+preview_configure (GtkWidget *widget, GdkEventConfigure *event)
+{
+	cairo_t *cr;
+
+	if (surface)
+		cairo_surface_destroy(surface);
+	
+	surface = gdk_window_create_similar_surface (gtk_widget_get_window(widget),
+						     CAIRO_CONTENT_COLOR,
+						     gtk_widget_get_allocated_width (widget),
+						     gtk_widget_get_allocated_height (widget));
+
+	preview_width = gtk_widget_get_allocated_width(widget);
+	preview_height = gtk_widget_get_allocated_height(widget);
+
+	cr = cairo_create(surface);
+	cairo_set_source_rgb(cr, 0, 0, 0);
+	cairo_paint(cr);
+	cairo_destroy(cr);
+	return TRUE;
 }
 
 static int
@@ -786,6 +831,7 @@ main(int argc, char *argv[])
 
 	GError *error = NULL;
 	gtk_init(&argc, &argv);
+	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
 	GtkBuilder *builder = gtk_builder_new();
 	char *glade_file = "/usr/share/camera/ui/camera.glade";
 	if (access("camera.glade", F_OK) != -1) {
@@ -800,9 +846,12 @@ main(int argc, char *argv[])
 	GObject *window = gtk_builder_get_object(builder, "window");
 	GObject *preview_box = gtk_builder_get_object(builder, "preview_box");
 	GObject *shutter = gtk_builder_get_object(builder, "shutter");
-	preview_image = gtk_builder_get_object(builder, "preview");
+	GObject *settings_btn = gtk_builder_get_object(builder, "settings");
+	preview = gtk_builder_get_object(builder, "preview");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
+	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
+	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
 	if (access("camera.css", F_OK) != -1) {
