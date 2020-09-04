@@ -55,14 +55,17 @@ static char *media_drv_name;
 static int  *interface_entity_id;
 static char *dev_name[20];
 static int media_fd;
+static int video_fd;
 
 // State
+static int ready = 0;
 static int current_width = -1;
 static int current_height = -1;
 static int current_fmt = 0;
 static int current_rotate = 0;
 static int current_fd;
 static int capture = 0;
+static int current_is_rear = 1;
 static cairo_surface_t *surface = NULL;
 static int preview_width = -1;
 static int preview_height = -1;
@@ -91,49 +94,43 @@ static void
 start_capturing(int fd)
 {
 	enum v4l2_buf_type type;
-	switch (io) {
-		case IO_METHOD_READ:
-			/* Nothing to do. */
-			break;
-		case IO_METHOD_MMAP:
-			for (int i = 0; i < n_buffers; ++i) {
-				struct v4l2_buffer buf = {
-					.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
-					.memory = V4L2_MEMORY_MMAP,
-					.index = i,
-				};
 
-				if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
-					errno_exit("VIDIOC_QBUF");
-				}
-			}
+	for (int i = 0; i < n_buffers; ++i) {
+		struct v4l2_buffer buf = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.memory = V4L2_MEMORY_MMAP,
+			.index = i,
+		};
 
-			type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			if (xioctl(fd, VIDIOC_STREAMON, &type) == -1) {
-				errno_exit("VIDIOC_STREAMON");
-			}
-			break;
-		case IO_METHOD_USERPTR:
-			for (int i = 0; i < n_buffers; ++i) {
-				struct v4l2_buffer buf = {
-					.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
-					.memory = V4L2_MEMORY_USERPTR,
-					.index = i,
-				};
-				buf.m.userptr = (unsigned long) buffers[i].start;
-				buf.length = buffers[i].length;
-
-				if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
-					errno_exit("VIDIOC_QBUF");
-				}
-			}
-
-			type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			if (xioctl(fd, VIDIOC_STREAMON, &type) == -1) {
-				errno_exit("VIDIOC_STREAMON");
-			}
-			break;
+		if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
+			errno_exit("VIDIOC_QBUF");
+		}
 	}
+
+	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (xioctl(fd, VIDIOC_STREAMON, &type) == -1) {
+		errno_exit("VIDIOC_STREAMON");
+	}
+
+	ready = 1;
+}
+
+static void
+stop_capturing(int fd)
+{
+	int i;
+	ready = 0;
+	printf("Stopping capture\n");
+
+	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if(xioctl(fd, VIDIOC_STREAMOFF, &type) == -1) {
+		errno_exit("VIDIOC_STREAMOFF");
+	}
+
+	for(i=0;i<n_buffers;++i){
+		munmap(buffers[i].start, buffers[i].length);
+	}
+
 }
 
 static void
@@ -199,7 +196,7 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 	ctrl.value = val;
 
 	if(xioctl(fd, VIDIOC_S_CTRL, &ctrl) == -1){
-		g_printerr("Failed to set control %d to %d", id, val);
+		g_printerr("Failed to set control %d to %d\n", id, val);
 		return -1;
 	}
 	return 0;
@@ -229,7 +226,8 @@ init_sensor(char* fn, int width, int height, int mbus)
 	fmt.format.width, fmt.format.height,
 	fmt.format.code);
 
-	v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
+	// Placeholder, default is also 1
+	//v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
 	close(current_fd);
 	current_fd = fd;
 }
@@ -342,19 +340,7 @@ init_device(int fd)
 		fmt.fmt.pix.sizeimage = min;
 	}
 
-	switch (io) {
-		case IO_METHOD_READ:
-			//init_read(fmt.fmt.pix.sizeimage);
-			break;
-
-		case IO_METHOD_MMAP:
-			init_mmap(fd);
-			break;
-
-		case IO_METHOD_USERPTR:
-			//init_userp(fmt.fmt.pix.sizeimage);
-			break;
-	}
+	init_mmap(fd);
 }
 
 static void
@@ -412,8 +398,8 @@ process_image(const int *p, int size)
 		cr = cairo_create(surface);
 		cairo_set_source_rgb(cr, 0,0,0);
 		cairo_paint(cr);
-		gdk_cairo_set_source_pixbuf(cr, pixbufrot, 0, 0);
 		cairo_scale(cr, scale, scale);
+		gdk_cairo_set_source_pixbuf(cr, pixbufrot, 0, 0);
 		cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_NONE);
 		cairo_paint(cr);
 		gtk_widget_queue_draw_area(preview, 0, 0, preview_width, preview_height);
@@ -538,6 +524,8 @@ read_frame(int fd)
 static gboolean
 get_frame(int fd)
 {
+	if (ready == 0)
+		return TRUE;
 	while (1) {
 		fd_set fds;
 		struct timeval tv;
@@ -751,7 +739,7 @@ setup_front()
 	link.sink.index = 0;
 
 	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
-		g_printerr("Could not disable front camera link\n");
+		g_printerr("Could not disable rear camera link\n");
 		return -1;
 	}
 
@@ -763,7 +751,7 @@ setup_front()
 	link.sink.index = 0;
 
 	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
-		g_printerr("Could not enable rear camera link\n");
+		g_printerr("Could not enable front camera link\n");
 		return -1;
 	}
 	current_width = front_width;
@@ -846,6 +834,29 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 	capture = 1;
 }
 
+void
+on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
+{
+	stop_capturing(video_fd);
+	close(current_fd);
+	if(current_is_rear == 1){
+		setup_front();
+		current_is_rear = 0;
+	}else{
+		setup_rear();
+		current_is_rear = 1;
+	}
+	printf("close() = %d\n", close(video_fd));
+	printf("Opening %s again\n", dev_name);
+	video_fd = open(dev_name, O_RDWR);
+	if (video_fd == -1) {
+		g_printerr("Error opening video device: %s\n", dev_name);
+		return 1;
+	}
+	init_device(video_fd);
+	start_capturing(video_fd);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -871,10 +882,12 @@ main(int argc, char *argv[])
 	GObject *window = gtk_builder_get_object(builder, "window");
 	GObject *preview_box = gtk_builder_get_object(builder, "preview_box");
 	GObject *shutter = gtk_builder_get_object(builder, "shutter");
+	GObject *switch_btn = gtk_builder_get_object(builder, "switch_camera");
 	GObject *settings_btn = gtk_builder_get_object(builder, "settings");
 	preview = gtk_builder_get_object(builder, "preview");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
+	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
 	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
 
@@ -916,6 +929,8 @@ main(int argc, char *argv[])
 		g_printerr("Error opening video device: %s\n", dev_name);
 		return 1;
 	}
+
+	video_fd = fd;
 
 	init_device(fd);
 	start_capturing(fd);
