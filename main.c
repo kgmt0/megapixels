@@ -617,11 +617,9 @@ find_dev_node(int maj, int min, char *fnbuf)
 	DIR *d;
 	struct dirent *dir;
 	struct stat info;
-	printf("find_dev_node\n");
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
 		sprintf(fnbuf, "/dev/%s", dir->d_name);
-		printf("whee\n");
 		stat(fnbuf, &info);
 		if (!S_ISCHR(info.st_mode)) {
 			continue;
@@ -725,21 +723,18 @@ find_cameras()
 		if (strncmp(entity.name, front_dev_name, strlen(front_dev_name)) == 0) {
 			front_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, front_dev);
-			printf("survived1\n");
 			printf("Found front cam, is %s at %s\n", entity.name, front_dev);
 			found++;
 		}
 		if (strncmp(entity.name, rear_dev_name, strlen(rear_dev_name)) == 0) {
 			rear_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, rear_dev);
-			printf("survived2\n");
 			printf("Found rear cam, is %s at %s\n", entity.name, rear_dev);
 			found++;
 		}
 		if (entity.type == MEDIA_ENT_F_IO_V4L) {
 			interface_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, dev_name);
-			printf("survived3\n");
 			printf("Found v4l2 interface node at %s\n", dev_name);
 		}
 	}
