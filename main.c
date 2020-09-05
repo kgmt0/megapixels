@@ -26,9 +26,7 @@ struct buffer {
 };
 
 struct buffer *buffers;
-static int *outbuffer;
 static unsigned int n_buffers;
-static enum io_method io = IO_METHOD_MMAP;
 
 // Rear camera
 static char *rear_dev_name;
@@ -252,22 +250,10 @@ init_device(int fd)
 		exit(EXIT_FAILURE);
 	}
 
-	switch (io) {
-		case IO_METHOD_READ:
-			if (!(cap.capabilities & V4L2_CAP_READWRITE)) {
-				fprintf(stderr, "%s does not support read i/o\n",
-					*dev_name);
-				exit(EXIT_FAILURE);
-			}
-			break;
-		case IO_METHOD_MMAP:
-		case IO_METHOD_USERPTR:
-			if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
-				fprintf(stderr, "%s does not support streaming i/o\n",
-					*dev_name);
-				exit(EXIT_FAILURE);
-			}
-			break;
+	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
+		fprintf(stderr, "%s does not support streaming i/o\n",
+			*dev_name);
+		exit(EXIT_FAILURE);
 	}
 
 	/* Select video input, video standard and tune here. */
@@ -446,76 +432,27 @@ read_frame(int fd)
 {
 	struct v4l2_buffer buf = {0};
 
-	switch (io) {
-		case IO_METHOD_READ:
-			if (read(fd, buffers[0].start, buffers[0].length) == -1) {
-				switch (errno) {
-					case EAGAIN:
-						return 0;
-					case EIO:
-						/* Could ignore EIO, see spec. */
-						/* fallthrough */
-					default:
-						errno_exit("read");
-						break;
-				}
-			}
-			process_image(buffers[0].start, buffers[0].length);
-			break;
-		case IO_METHOD_MMAP:
-			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			buf.memory = V4L2_MEMORY_MMAP;
-			if (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
-				switch (errno) {
-					case EAGAIN:
-						return 0;
-					case EIO:
-						/* Could ignore EIO, see spec. */
-						/* fallthrough */
-					default:
-						errno_exit("VIDIOC_DQBUF");
-						break;
-				}
-			}
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	if (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
+		switch (errno) {
+			case EAGAIN:
+				return 0;
+			case EIO:
+				/* Could ignore EIO, see spec. */
+				/* fallthrough */
+			default:
+				errno_exit("VIDIOC_DQBUF");
+				break;
+		}
+	}
 
-			//assert(buf.index < n_buffers);
+	//assert(buf.index < n_buffers);
 
-			process_image(buffers[buf.index].start, buf.bytesused);
+	process_image(buffers[buf.index].start, buf.bytesused);
 
-			if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
-				errno_exit("VIDIOC_QBUF");
-			}
-			break;
-		case IO_METHOD_USERPTR:
-			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-			buf.memory = V4L2_MEMORY_USERPTR;
-			if (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
-				switch (errno) {
-					case EAGAIN:
-						return 0;
-					case EIO:
-						/* Could ignore EIO, see spec. */
-						/* fallthrough */
-					default:
-						errno_exit("VIDIOC_DQBUF");
-						break;
-				}
-			}
-			unsigned int i;
-			for (i = 0; i < n_buffers; ++i) {
-				if (buf.m.userptr == (unsigned long) buffers[i].start
-					&& buf.length == buffers[i].length) {
-					break;
-				}
-			}
-
-			//assert(i < n_buffers);
-
-			process_image((void *) buf.m.userptr, buf.bytesused);
-			if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
-				errno_exit("VIDIOC_QBUF");
-			}
-			break;
+	if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
+		errno_exit("VIDIOC_QBUF");
 	}
 
 	return 1;
