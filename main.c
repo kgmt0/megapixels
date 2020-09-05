@@ -7,6 +7,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <assert.h>
+#include <limits.h>
 #include <linux/kdev_t.h>
 #include <sys/sysmacros.h>
 #include <asm/errno.h>
@@ -30,28 +32,28 @@ static unsigned int n_buffers;
 
 // Rear camera
 static char *rear_dev_name;
-static int  *rear_entity_id;
-static char *rear_dev[20];
-static int  rear_width = -1;
-static int  rear_height = -1;
-static int  rear_rotate = 0;
-static int  rear_fmt = V4L2_PIX_FMT_RGB24;
-static int  rear_mbus = MEDIA_BUS_FMT_RGB888_1X24;
+static unsigned int rear_entity_id;
+static char rear_dev[260];
+static int rear_width = -1;
+static int rear_height = -1;
+static int rear_rotate = 0;
+static int rear_fmt = V4L2_PIX_FMT_RGB24;
+static int rear_mbus = MEDIA_BUS_FMT_RGB888_1X24;
 
 // Front camera
 static char *front_dev_name;
-static int  *front_entity_id;
-static char *front_dev[20];
-static int  front_width = -1;
-static int  front_height = -1;
-static int  front_rotate = 0;
-static int  front_fmt = V4L2_PIX_FMT_RGB24;
-static int  front_mbus = MEDIA_BUS_FMT_RGB888_1X24;
+static unsigned int front_entity_id;
+static char front_dev[260];
+static int front_width = -1;
+static int front_height = -1;
+static int front_rotate = 0;
+static int front_fmt = V4L2_PIX_FMT_RGB24;
+static int front_mbus = MEDIA_BUS_FMT_RGB888_1X24;
 
 // Camera interface
 static char *media_drv_name;
-static int  *interface_entity_id;
-static char *dev_name[20];
+static unsigned int interface_entity_id;
+static char dev_name[260];
 static int media_fd;
 static int video_fd;
 
@@ -69,7 +71,7 @@ static int preview_width = -1;
 static int preview_height = -1;
 
 // Widgets
-GObject *preview;
+GtkWidget *preview;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -142,7 +144,7 @@ init_mmap(int fd)
 	if (xioctl(fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s does not support memory mapping",
-				*dev_name);
+				dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_REQBUFS");
@@ -151,7 +153,7 @@ init_mmap(int fd)
 
 	if (req.count < 2) {
 		fprintf(stderr, "Insufficient buffer memory on %s\n",
-			*dev_name);
+			dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -237,7 +239,7 @@ init_device(int fd)
 	if (xioctl(fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s is no V4L2 device\n",
-				*dev_name);
+				dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_QUERYCAP");
@@ -246,13 +248,13 @@ init_device(int fd)
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 		fprintf(stderr, "%s is no video capture device\n",
-			*dev_name);
+			dev_name);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
 		fprintf(stderr, "%s does not support streaming i/o\n",
-			*dev_name);
+			dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -458,8 +460,8 @@ read_frame(int fd)
 	return 1;
 }
 
-static gboolean
-get_frame(int fd)
+gboolean
+get_frame()
 {
 	if (ready == 0)
 		return TRUE;
@@ -469,13 +471,13 @@ get_frame(int fd)
 		int r;
 
 		FD_ZERO(&fds);
-		FD_SET(fd, &fds);
+		FD_SET(video_fd, &fds);
 
 		/* Timeout. */
 		tv.tv_sec = 2;
 		tv.tv_usec = 0;
 
-		r = select(fd + 1, &fds, NULL, NULL, &tv);
+		r = select(video_fd + 1, &fds, NULL, NULL, &tv);
 
 		if (r == -1) {
 			if (EINTR == errno) {
@@ -487,7 +489,7 @@ get_frame(int fd)
 			exit(EXIT_FAILURE);
 		}
 
-		if (read_frame(fd)) {
+		if (read_frame(video_fd)) {
 			break;
 		}
 		/* EAGAIN - continue select loop. */
@@ -495,6 +497,13 @@ get_frame(int fd)
 	return TRUE;
 }
 
+int
+strtoint(const char *nptr, char **endptr, int base)
+{
+	long x = strtol(nptr, endptr, base);
+	assert(x <= INT_MAX);
+	return (int) x;
+}
 
 static int
 config_ini_handler(void *user, const char *section, const char *name,
@@ -502,11 +511,11 @@ config_ini_handler(void *user, const char *section, const char *name,
 {
 	if (strcmp(section, "rear") == 0) {
 		if (strcmp(name, "width") == 0) {
-			rear_width = strtol(value, NULL, 10);
+			rear_width = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
-			rear_height = strtol(value, NULL, 10);
+			rear_height = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "rotate") == 0) {
-			rear_rotate = strtol(value, NULL, 10);
+			rear_rotate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
 			if (strcmp(value, "RGB") == 0) {
 				rear_fmt = V4L2_PIX_FMT_RGB24;
@@ -546,11 +555,11 @@ config_ini_handler(void *user, const char *section, const char *name,
 		}
 	} else if (strcmp(section, "front") == 0) {
 		if (strcmp(name, "width") == 0) {
-			front_width = strtol(value, NULL, 10);
+			front_width = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
-			front_height = strtol(value, NULL, 10);
+			front_height = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "rotate") == 0) {
-			front_rotate = strtol(value, NULL, 10);
+			front_rotate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
 			if (strcmp(value, "RGB") == 0) {
 				front_fmt = V4L2_PIX_FMT_RGB24;
@@ -608,10 +617,11 @@ find_dev_node(int maj, int min, char *fnbuf)
 	DIR *d;
 	struct dirent *dir;
 	struct stat info;
-
+	printf("find_dev_node\n");
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
 		sprintf(fnbuf, "/dev/%s", dir->d_name);
+		printf("whee\n");
 		stat(fnbuf, &info);
 		if (!S_ISCHR(info.st_mode)) {
 			continue;
@@ -715,18 +725,21 @@ find_cameras()
 		if (strncmp(entity.name, front_dev_name, strlen(front_dev_name)) == 0) {
 			front_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, front_dev);
+			printf("survived1\n");
 			printf("Found front cam, is %s at %s\n", entity.name, front_dev);
 			found++;
 		}
 		if (strncmp(entity.name, rear_dev_name, strlen(rear_dev_name)) == 0) {
 			rear_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, rear_dev);
+			printf("survived2\n");
 			printf("Found rear cam, is %s at %s\n", entity.name, rear_dev);
 			found++;
 		}
 		if (entity.type == MEDIA_ENT_F_IO_V4L) {
 			interface_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, dev_name);
+			printf("survived3\n");
 			printf("Found v4l2 interface node at %s\n", dev_name);
 		}
 	}
@@ -743,7 +756,7 @@ find_media_fd()
 	DIR *d;
 	struct dirent *dir;
 	int fd;
-	char fnbuf[20];
+	char fnbuf[261];
 	struct media_device_info mdi = {0};
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
@@ -786,7 +799,7 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 	video_fd = open(dev_name, O_RDWR);
 	if (video_fd == -1) {
 		g_printerr("Error opening video device: %s\n", dev_name);
-		return 1;
+		return;
 	}
 	init_device(video_fd);
 	start_capturing(video_fd);
@@ -814,12 +827,12 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	GObject *window = gtk_builder_get_object(builder, "window");
-	GObject *preview_box = gtk_builder_get_object(builder, "preview_box");
-	GObject *shutter = gtk_builder_get_object(builder, "shutter");
-	GObject *switch_btn = gtk_builder_get_object(builder, "switch_camera");
-	GObject *settings_btn = gtk_builder_get_object(builder, "settings");
-	preview = gtk_builder_get_object(builder, "preview");
+	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+	GtkWidget *preview_box = GTK_WIDGET(gtk_builder_get_object(builder, "preview_box"));
+	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
+	GtkWidget *switch_btn = GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
+	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
+	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
@@ -873,7 +886,7 @@ main(int argc, char *argv[])
 	// Get a new frame every 34ms ~30fps
 	printf("window show\n");
 	gtk_widget_show(window);
-	g_idle_add(get_frame, fd);
+	g_idle_add((GSourceFunc)get_frame, NULL);
 	gtk_main();
 	return 0;
 }
