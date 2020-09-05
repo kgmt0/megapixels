@@ -1,0 +1,9 @@
+image: alpine/edge
+packages:
+  - meson
+  - samurai
+  - gtk+3.0-dev
+tasks:
+  - build: |
+      meson build
+      ninja -C build
