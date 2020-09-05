@@ -123,11 +123,11 @@ stop_capturing(int fd)
 	printf("Stopping capture\n");
 
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if(xioctl(fd, VIDIOC_STREAMOFF, &type) == -1) {
+	if (xioctl(fd, VIDIOC_STREAMOFF, &type) == -1) {
 		errno_exit("VIDIOC_STREAMOFF");
 	}
 
-	for(i=0;i<n_buffers;++i){
+	for (i = 0; i < n_buffers; ++i) {
 		munmap(buffers[i].start, buffers[i].length);
 	}
 
@@ -195,7 +195,7 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 	ctrl.id = id;
 	ctrl.value = val;
 
-	if(xioctl(fd, VIDIOC_S_CTRL, &ctrl) == -1){
+	if (xioctl(fd, VIDIOC_S_CTRL, &ctrl) == -1) {
 		g_printerr("Failed to set control %d to %d\n", id, val);
 		return -1;
 	}
@@ -203,7 +203,7 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 }
 
 static void
-init_sensor(char* fn, int width, int height, int mbus)
+init_sensor(char *fn, int width, int height, int mbus)
 {
 	int fd;
 	struct v4l2_subdev_format fmt;
@@ -223,8 +223,8 @@ init_sensor(char* fn, int width, int height, int mbus)
 	}
 
 	g_printerr("Driver returned %dx%d fmt %d\n",
-	fmt.format.width, fmt.format.height,
-	fmt.format.code);
+		fmt.format.width, fmt.format.height,
+		fmt.format.code);
 
 	// Placeholder, default is also 1
 	//v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
@@ -363,16 +363,16 @@ process_image(const int *p, int size)
 	dc1394bayer_method_t method = DC1394_BAYER_METHOD_DOWNSAMPLE;
 	dc1394color_filter_t filter = DC1394_COLOR_FILTER_BGGR;
 
-	if(capture){
+	if (capture) {
 		method = DC1394_BAYER_METHOD_SIMPLE;
 		// method = DC1394_BAYER_METHOD_VNG is slightly sharper but takes 10 seconds;
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width, current_height);
-	}else{
-		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width/2, current_height/2);
+	} else {
+		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width / 2, current_height / 2);
 	}
 
 	pixels = gdk_pixbuf_get_pixels(pixbuf);
-	dc1394_bayer_decoding_8bit((const uint8_t*)p, pixels, current_width, current_height, filter, method);
+	dc1394_bayer_decoding_8bit((const uint8_t *) p, pixels, current_width, current_height, filter, method);
 	if (current_rotate == 0) {
 		pixbufrot = pixbuf;
 	} else if (current_rotate == 90) {
@@ -382,21 +382,21 @@ process_image(const int *p, int size)
 	} else if (current_rotate == 270) {
 		pixbufrot = gdk_pixbuf_rotate_simple(pixbuf, GDK_PIXBUF_ROTATE_CLOCKWISE);
 	}
-	if (capture){
+	if (capture) {
 		time(&rawtime);
-		tim =*(localtime(&rawtime));
+		tim = *(localtime(&rawtime));
 		strftime(timestamp, 30, "%F %T", &tim);
 		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), timestamp);
 		printf("Saving image\n");
 		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "85", NULL);
-		if(error != NULL) {
+		if (error != NULL) {
 			g_printerr(error->message);
 			g_clear_error(&error);
 		}
 	} else {
-		scale = (double)preview_width/gdk_pixbuf_get_width(pixbufrot);
+		scale = (double) preview_width / gdk_pixbuf_get_width(pixbufrot);
 		cr = cairo_create(surface);
-		cairo_set_source_rgb(cr, 0,0,0);
+		cairo_set_source_rgb(cr, 0, 0, 0);
 		cairo_paint(cr);
 		cairo_scale(cr, scale, scale);
 		gdk_cairo_set_source_pixbuf(cr, pixbufrot, 0, 0);
@@ -406,30 +406,30 @@ process_image(const int *p, int size)
 	}
 	capture = 0;
 	t = clock() - t;
-	time_taken = ((double)t)/CLOCKS_PER_SEC;
-	printf("%f fps\n", 1.0/time_taken);
+	time_taken = ((double) t) / CLOCKS_PER_SEC;
+	printf("%f fps\n", 1.0 / time_taken);
 }
 
 static gboolean
-preview_draw (GtkWidget *widget, cairo_t *cr, gpointer data)
+preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
-	cairo_set_source_surface(cr, surface, 0,0);
+	cairo_set_source_surface(cr, surface, 0, 0);
 	cairo_paint(cr);
 	return FALSE;
 }
 
 static gboolean
-preview_configure (GtkWidget *widget, GdkEventConfigure *event)
+preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 {
 	cairo_t *cr;
 
 	if (surface)
 		cairo_surface_destroy(surface);
-	
-	surface = gdk_window_create_similar_surface (gtk_widget_get_window(widget),
-						     CAIRO_CONTENT_COLOR,
-						     gtk_widget_get_allocated_width (widget),
-						     gtk_widget_get_allocated_height (widget));
+
+	surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
+		CAIRO_CONTENT_COLOR,
+		gtk_widget_get_allocated_width(widget),
+		gtk_widget_get_allocated_height(widget));
 
 	preview_width = gtk_widget_get_allocated_width(widget);
 	preview_height = gtk_widget_get_allocated_height(widget);
@@ -559,8 +559,6 @@ get_frame(int fd)
 }
 
 
-
-
 static int
 config_ini_handler(void *user, const char *section, const char *name,
 	const char *value)
@@ -603,7 +601,7 @@ config_ini_handler(void *user, const char *section, const char *name,
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
 			}
-		} else if (strcmp(name, "driver") == 0){
+		} else if (strcmp(name, "driver") == 0) {
 			rear_dev_name = strdup(value);
 		} else {
 			g_printerr("Unknown key '%s' in [rear]\n", name);
@@ -647,7 +645,7 @@ config_ini_handler(void *user, const char *section, const char *name,
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
 			}
-		} else if (strcmp(name, "driver") == 0){
+		} else if (strcmp(name, "driver") == 0) {
 			front_dev_name = strdup(value);
 		} else {
 			g_printerr("Unknown key '%s' in [front]\n", name);
@@ -668,17 +666,17 @@ config_ini_handler(void *user, const char *section, const char *name,
 }
 
 int
-find_dev_node(int maj, int min, char* fnbuf)
+find_dev_node(int maj, int min, char *fnbuf)
 {
 	DIR *d;
 	struct dirent *dir;
 	struct stat info;
-	
+
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
 		sprintf(fnbuf, "/dev/%s", dir->d_name);
 		stat(fnbuf, &info);
-		if (!S_ISCHR(info.st_mode)){
+		if (!S_ISCHR(info.st_mode)) {
 			continue;
 		}
 		if (major(info.st_rdev) == maj && minor(info.st_rdev) == min) {
@@ -700,7 +698,7 @@ setup_rear()
 	link.sink.entity = interface_entity_id;
 	link.sink.index = 0;
 
-	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("Could not disable front camera link\n");
 		return -1;
 	}
@@ -712,7 +710,7 @@ setup_rear()
 	link.sink.entity = interface_entity_id;
 	link.sink.index = 0;
 
-	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("Could not enable rear camera link\n");
 		return -1;
 	}
@@ -738,7 +736,7 @@ setup_front()
 	link.sink.entity = interface_entity_id;
 	link.sink.index = 0;
 
-	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("Could not disable rear camera link\n");
 		return -1;
 	}
@@ -750,7 +748,7 @@ setup_front()
 	link.sink.entity = interface_entity_id;
 	link.sink.index = 0;
 
-	if(xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0){
+	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("Could not enable front camera link\n");
 		return -1;
 	}
@@ -773,17 +771,17 @@ find_cameras()
 	while (1) {
 		entity.id = entity.id | MEDIA_ENT_ID_FLAG_NEXT;
 		ret = xioctl(media_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
-		if (ret < 0){
+		if (ret < 0) {
 			break;
 		}
 		printf("At node %s, (0x%x)\n", entity.name, entity.type);
-		if(strncmp(entity.name, front_dev_name, strlen(front_dev_name)) == 0) {
+		if (strncmp(entity.name, front_dev_name, strlen(front_dev_name)) == 0) {
 			front_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, front_dev);
 			printf("Found front cam, is %s at %s\n", entity.name, front_dev);
 			found++;
 		}
-		if(strncmp(entity.name, rear_dev_name, strlen(rear_dev_name)) == 0) {
+		if (strncmp(entity.name, rear_dev_name, strlen(rear_dev_name)) == 0) {
 			rear_entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, rear_dev);
 			printf("Found rear cam, is %s at %s\n", entity.name, rear_dev);
@@ -795,7 +793,7 @@ find_cameras()
 			printf("Found v4l2 interface node at %s\n", dev_name);
 		}
 	}
-	if(found < 2){
+	if (found < 2) {
 		return -1;
 	}
 	return 0;
@@ -812,13 +810,13 @@ find_media_fd()
 	struct media_device_info mdi = {0};
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
-		if(strncmp(dir->d_name, "media", 5) == 0) {
+		if (strncmp(dir->d_name, "media", 5) == 0) {
 			sprintf(fnbuf, "/dev/%s", dir->d_name);
 			printf("Checking %s\n", fnbuf);
 			fd = open(fnbuf, O_RDWR);
 			xioctl(fd, MEDIA_IOC_DEVICE_INFO, &mdi);
 			printf("Found media device: %s\n", mdi.driver);
-			if (strcmp(mdi.driver, media_drv_name) == 0){
+			if (strcmp(mdi.driver, media_drv_name) == 0) {
 				media_fd = fd;
 				return 0;
 			}
@@ -839,10 +837,10 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 {
 	stop_capturing(video_fd);
 	close(current_fd);
-	if(current_is_rear == 1){
+	if (current_is_rear == 1) {
 		setup_front();
 		current_is_rear = 0;
-	}else{
+	} else {
 		setup_rear();
 		current_is_rear = 1;
 	}
