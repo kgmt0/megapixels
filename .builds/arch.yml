@@ -1,0 +1,12 @@
+image: archlinux
+packages:
+  - meson
+  - ninja
+  - gtk+3.0-dev
+tasks:
+  - build: |
+      cd megapixels
+      meson build
+      ninja -C build
+artifacts:
+  - megapixels/build/megapixels
