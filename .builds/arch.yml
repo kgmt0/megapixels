@@ -2,7 +2,7 @@ image: archlinux
 packages:
   - meson
   - ninja
-  - gtk+3.0-dev
+  - gtk3
 tasks:
   - build: |
       cd megapixels
