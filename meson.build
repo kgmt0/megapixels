@@ -4,7 +4,7 @@ gtkdep = dependency('gtk+-3.0')
 cc = meson.get_compiler('c')
 libm = cc.find_library('m', required: false)
 
-executable('megapixels', 'main.c', 'ini.c', 'bayer.c', dependencies : [gtkdep, libm], install : true)
+executable('megapixels', 'main.c', 'ini.c', 'bayer.c', 'quickdebayer.c', dependencies : [gtkdep, libm], install : true)
 
 install_data(['camera.glade', 'camera.css'],
              install_dir : get_option('datadir') / 'megapixels/ui')

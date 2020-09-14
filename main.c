@@ -15,6 +15,7 @@
 #include <gtk/gtk.h>
 #include "ini.h"
 #include "bayer.h"
+#include "quickdebayer.h"
 
 enum io_method {
 	IO_METHOD_READ,
@@ -370,12 +371,14 @@ process_image(const int *p, int size)
 		method = DC1394_BAYER_METHOD_SIMPLE;
 		// method = DC1394_BAYER_METHOD_VNG is slightly sharper but takes 10 seconds;
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width, current_height);
+		pixels = gdk_pixbuf_get_pixels(pixbuf);
+		dc1394_bayer_decoding_8bit((const uint8_t *) p, pixels, current_width, current_height, filter, method);
 	} else {
-		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width / 2, current_height / 2);
+		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width / 6, current_height / 6);
+		pixels = gdk_pixbuf_get_pixels(pixbuf);
+		quick_debayer_bggr8((const uint8_t *)p, pixels, current_width, current_height, 3);
 	}
 
-	pixels = gdk_pixbuf_get_pixels(pixbuf);
-	dc1394_bayer_decoding_8bit((const uint8_t *) p, pixels, current_width, current_height, filter, method);
 	if (current_rotate == 0) {
 		pixbufrot = pixbuf;
 	} else if (current_rotate == 90) {
