@@ -838,7 +838,7 @@ main(int argc, char *argv[])
 	if (access("camera.css", F_OK) != -1) {
 		gtk_css_provider_load_from_path(provider, "camera.css", NULL);
 	} else {
-		gtk_css_provider_load_from_path(provider, "/usr/share/camera/ui/camera.css", NULL);
+		gtk_css_provider_load_from_path(provider, "/usr/share/megapixels/ui/camera.css", NULL);
 	}
 	GtkStyleContext *context = gtk_widget_get_style_context(preview_box);
 	gtk_style_context_add_provider(context,
