@@ -36,6 +36,7 @@ static unsigned int rear_entity_id;
 static char rear_dev[260];
 static int rear_width = -1;
 static int rear_height = -1;
+static int rear_rate = 30;
 static int rear_rotate = 0;
 static int rear_fmt = V4L2_PIX_FMT_RGB24;
 static int rear_mbus = MEDIA_BUS_FMT_RGB888_1X24;
@@ -46,6 +47,7 @@ static unsigned int front_entity_id;
 static char front_dev[260];
 static int front_width = -1;
 static int front_height = -1;
+static int front_rate = 30;
 static int front_rotate = 0;
 static int front_fmt = V4L2_PIX_FMT_RGB24;
 static int front_mbus = MEDIA_BUS_FMT_RGB888_1X24;
@@ -203,11 +205,24 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 }
 
 static void
-init_sensor(char *fn, int width, int height, int mbus)
+init_sensor(char *fn, int width, int height, int mbus, int rate)
 {
 	int fd;
+	struct v4l2_subdev_frame_interval interval;
 	struct v4l2_subdev_format fmt;
 	fd = open(fn, O_RDWR);
+
+	g_printerr("Setting sensor rate to %d\n", rate);
+	interval.pad = 0;
+	interval.interval.numerator = 1;
+	interval.interval.denominator = rate;
+
+	if (xioctl(fd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &interval) == -1) {
+		errno_exit("VIDIOC_SUBDEV_S_FRAME_INTERVAL");
+	}
+
+	g_printerr("Driver returned %d/%d frameinterval\n",
+		interval.interval.numerator, interval.interval.denominator);
 
 	g_printerr("Setting sensor to %dx%d fmt %d\n",
 		width, height, mbus);
@@ -376,7 +391,7 @@ process_image(const int *p, int size)
 		strftime(timestamp, 30, "%F %T", &tim);
 		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), timestamp);
 		printf("Saving image\n");
-		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "85", NULL);
+		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "100", NULL);
 		if (error != NULL) {
 			g_printerr(error->message);
 			g_clear_error(&error);
@@ -514,6 +529,8 @@ config_ini_handler(void *user, const char *section, const char *name,
 			rear_width = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
 			rear_height = strtoint(value, NULL, 10);
+		} else if (strcmp(name, "rate") == 0) {
+			rear_rate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "rotate") == 0) {
 			rear_rotate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
@@ -558,6 +575,8 @@ config_ini_handler(void *user, const char *section, const char *name,
 			front_width = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
 			front_height = strtoint(value, NULL, 10);
+		} else if (strcmp(name, "rate") == 0) {
+			front_rate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "rotate") == 0) {
 			front_rotate = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "fmt") == 0) {
@@ -665,7 +684,7 @@ setup_rear()
 	current_fmt = rear_fmt;
 	current_rotate = rear_rotate;
 	// Find camera node
-	init_sensor(rear_dev, rear_width, rear_height, rear_mbus);
+	init_sensor(rear_dev, rear_width, rear_height, rear_mbus, rear_rate);
 	return 0;
 }
 
@@ -702,7 +721,7 @@ setup_front()
 	current_fmt = front_fmt;
 	current_rotate = front_rotate;
 	// Find camera node
-	init_sensor(front_dev, front_width, front_height, front_mbus);
+	init_sensor(front_dev, front_width, front_height, front_mbus, front_rate);
 	return 0;
 }
 
