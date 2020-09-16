@@ -363,6 +363,7 @@ process_image(const int *p, int size)
 	double scale;
 	cairo_t *cr;
 	t = clock();
+	int skip = 2;
 
 	dc1394bayer_method_t method = DC1394_BAYER_METHOD_DOWNSAMPLE;
 	dc1394color_filter_t filter = DC1394_COLOR_FILTER_BGGR;
@@ -374,9 +375,12 @@ process_image(const int *p, int size)
 		pixels = gdk_pixbuf_get_pixels(pixbuf);
 		dc1394_bayer_decoding_8bit((const uint8_t *) p, pixels, current_width, current_height, filter, method);
 	} else {
-		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width / 6, current_height / 6);
+		if(current_width > 1280) {
+			skip = 3;
+		}
+		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current_width / (skip*2), current_height / (skip*2));
 		pixels = gdk_pixbuf_get_pixels(pixbuf);
-		quick_debayer_bggr8((const uint8_t *)p, pixels, current_width, current_height, 3);
+		quick_debayer_bggr8((const uint8_t *)p, pixels, current_width, current_height, skip);
 	}
 
 	if (current_rotate == 0) {
@@ -413,7 +417,7 @@ process_image(const int *p, int size)
 	capture = 0;
 	t = clock() - t;
 	time_taken = ((double) t) / CLOCKS_PER_SEC;
-	printf("%f fps\n", 1.0 / time_taken);
+	//printf("%f fps\n", 1.0 / time_taken);
 }
 
 static gboolean

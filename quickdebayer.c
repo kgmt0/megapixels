@@ -8,6 +8,7 @@ quick_debayer_bggr8(const uint8_t *source, uint8_t *destination, int width, int 
 {
 	int byteskip = 2 * skip;
 	int input_size = width * height;
+	int output_size = (width/byteskip) * (height/byteskip);
 	int i;
 	int j=0;
 	int row_left = width;
@@ -20,9 +21,10 @@ quick_debayer_bggr8(const uint8_t *source, uint8_t *destination, int width, int 
 		destination[j++] = source[i];
 		i = i + byteskip;
 		row_left = row_left - byteskip;
-		if(row_left <= 0){
+		if(row_left < byteskip){
+			i = i + row_left;
 			row_left = width;
-			i = i+width;
+			i = i + width;
 			i = i + (width * 2 * (skip-1));
 		}
 	}
