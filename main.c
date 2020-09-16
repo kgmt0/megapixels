@@ -75,6 +75,8 @@ static int preview_height = -1;
 
 // Widgets
 GtkWidget *preview;
+GtkWidget *error_box;
+GtkWidget *error_message;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -91,6 +93,13 @@ errno_exit(const char *s)
 {
 	fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
 	exit(EXIT_FAILURE);
+}
+
+static void
+show_error(const char *s)
+{
+	gtk_label_set_text(GTK_LABEL(error_message), s);
+	gtk_widget_show(error_box);
 }
 
 static void
@@ -248,7 +257,7 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 	current_fd = fd;
 }
 
-static void
+static int
 init_device(int fd)
 {
 	struct v4l2_capability cap;
@@ -311,9 +320,11 @@ init_device(int fd)
 		fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
 		if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1) {
-			errno_exit("VIDIOC_S_FMT");
+			g_printerr("VIDIOC_S_FMT failed");
+			show_error("Could not set camera mode");
+			return -1;
 		}
-
+		
 		g_printerr("Driver returned %dx%d fmt %d\n",
 			fmt.fmt.pix.width, fmt.fmt.pix.height,
 			fmt.fmt.pix.pixelformat);
@@ -345,6 +356,7 @@ init_device(int fd)
 	}
 
 	init_mmap(fd);
+	return 0;
 }
 
 static void
@@ -804,6 +816,12 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 void
+on_error_close_clicked(GtkWidget *widget, gpointer user_data)
+{
+	gtk_widget_hide(error_box);
+}
+
+void
 on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 {
 	stop_capturing(video_fd);
@@ -815,8 +833,7 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 		setup_rear();
 		current_is_rear = 1;
 	}
-	printf("close() = %d\n", close(video_fd));
-	printf("Opening %s again\n", dev_name);
+	close(video_fd);
 	video_fd = open(dev_name, O_RDWR);
 	if (video_fd == -1) {
 		g_printerr("Error opening video device: %s\n", dev_name);
@@ -853,9 +870,13 @@ main(int argc, char *argv[])
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
 	GtkWidget *switch_btn = GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
 	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
+	GtkWidget *error_close = GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
+	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
+	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
+	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked), NULL);
 	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
 	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
@@ -867,6 +888,10 @@ main(int argc, char *argv[])
 		gtk_css_provider_load_from_path(provider, "/usr/share/megapixels/ui/camera.css", NULL);
 	}
 	GtkStyleContext *context = gtk_widget_get_style_context(preview_box);
+	gtk_style_context_add_provider(context,
+		GTK_STYLE_PROVIDER(provider),
+		GTK_STYLE_PROVIDER_PRIORITY_USER);
+	context = gtk_widget_get_style_context(error_box);
 	gtk_style_context_add_provider(context,
 		GTK_STYLE_PROVIDER(provider),
 		GTK_STYLE_PROVIDER_PRIORITY_USER);
@@ -882,29 +907,33 @@ main(int argc, char *argv[])
 		g_printerr("Could not parse config file\n");
 		return 1;
 	}
-
 	if (find_media_fd() == -1) {
 		g_printerr("Could not find the media node\n");
-		return 1;
+		show_error("Could not find the media node");
+		goto failed;
 	}
 	if (find_cameras() == -1) {
 		g_printerr("Could not find the cameras\n");
-		return 1;
+		show_error("Could not find the cameras");
+		goto failed;
 	}
 	setup_rear();
 
 	int fd = open(dev_name, O_RDWR);
 	if (fd == -1) {
 		g_printerr("Error opening video device: %s\n", dev_name);
-		return 1;
+		show_error("Error opening the video device");
+		goto failed;
 	}
 
 	video_fd = fd;
 
-	init_device(fd);
+	if(init_device(fd) < 0){
+		goto failed;
+	}
 	start_capturing(fd);
 
-	// Get a new frame every 34ms ~30fps
+failed:
 	printf("window show\n");
 	gtk_widget_show(window);
 	g_idle_add((GSourceFunc)get_frame, NULL);

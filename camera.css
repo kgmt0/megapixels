@@ -1,3 +1,8 @@
 .black {
     background: #000000;
 }
+
+.errorbox {
+    background: #dd0000;
+    color: #ffffff;
+}
