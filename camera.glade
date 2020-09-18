@@ -103,7 +103,7 @@
                           <object class="GtkImage">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="stock">gtk-refresh</property>
+                            <property name="resource">/org/postmarketos/Megapixels/switch-camera.svg</property>
                           </object>
                         </child>
                       </object>

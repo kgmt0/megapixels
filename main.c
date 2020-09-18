@@ -851,19 +851,9 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	GError *error = NULL;
 	gtk_init(&argc, &argv);
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
-	GtkBuilder *builder = gtk_builder_new();
-	char *glade_file = "/usr/share/megapixels/ui/camera.glade";
-	if (access("camera.glade", F_OK) != -1) {
-		glade_file = "camera.glade";
-	}
-	if (gtk_builder_add_from_file(builder, glade_file, &error) == 0) {
-		g_printerr("Error loading file: %s\n", error->message);
-		g_clear_error(&error);
-		return 1;
-	}
+	GtkBuilder *builder = gtk_builder_new_from_resource("/org/postmarketos/Megapixels/camera.glade");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *preview_box = GTK_WIDGET(gtk_builder_get_object(builder, "preview_box"));
@@ -885,7 +875,7 @@ main(int argc, char *argv[])
 	if (access("camera.css", F_OK) != -1) {
 		gtk_css_provider_load_from_path(provider, "camera.css", NULL);
 	} else {
-		gtk_css_provider_load_from_path(provider, "/usr/share/megapixels/ui/camera.css", NULL);
+		gtk_css_provider_load_from_resource(provider, "/org/postmarketos/Megapixels/camera.css");
 	}
 	GtkStyleContext *context = gtk_widget_get_style_context(preview_box);
 	gtk_style_context_add_provider(context,
