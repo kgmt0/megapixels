@@ -15,3 +15,10 @@ install_data(['org.postmarketos.Megapixels.desktop'],
 install_data('org.postmarketos.Megapixels.svg',
   install_dir: join_paths(get_option('datadir'), 'icons/hicolor/scalable/apps')
 )
+
+install_data([
+  'config/pine64,pinephone-1.0.ini',
+  'config/pine64,pinephone-1.1.ini',
+  'config/pine64,pinephone-1.2.ini',
+  ],
+  install_dir : get_option('datadir') / 'megapixels/config/')
