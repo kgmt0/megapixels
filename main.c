@@ -407,10 +407,10 @@ process_image(const int *p, int size)
 	if (capture) {
 		time(&rawtime);
 		tim = *(localtime(&rawtime));
-		strftime(timestamp, 30, "%F %T", &tim);
-		sprintf(fname, "%s/Pictures/Photo-%s.jpg", getenv("HOME"), timestamp);
+		strftime(timestamp, 30, "%Y%m%d%H%M%S", &tim);
+		sprintf(fname, "%s/Pictures/IMG%s.jpg", getenv("HOME"), timestamp);
 		printf("Saving image\n");
-		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "100", NULL);
+		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "95", NULL);
 		if (error != NULL) {
 			g_printerr(error->message);
 			g_clear_error(&error);
