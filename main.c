@@ -844,12 +844,43 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 int
+find_config(char *conffile)
+{
+	char buf[512];
+	FILE *fp;
+
+	if(access("/proc/device-tree/compatible", F_OK) != -1) {
+		fp = fopen("/proc/device-tree/compatible", "r");
+		fgets(buf, 512, fp);
+		fclose(fp);
+		sprintf(conffile, "/usr/share/megapixels/config/%s.ini", buf);
+		if(access(conffile, F_OK) != -1) {
+			printf("Found config file at %s\n", conffile);
+			return 0;
+		}
+		sprintf(conffile, "config/%s.ini", buf);
+		if(access(conffile, F_OK) != -1) {
+			printf("Found config file at %s\n", conffile);
+			return 0;
+		}
+		printf("%s not found\n", conffile);
+	} else {
+		printf("Could not read device name from device tree\n");
+	}
+	conffile = "/etc/megapixels.ini";
+	if(access(conffile, F_OK) != -1) {
+		printf("Found config file at %s\n", conffile);
+		return 0;
+	}
+	return -1;
+}
+
+int
 main(int argc, char *argv[])
 {
-	if (argc != 2) {
-		g_printerr("Usage: camera configfile\n");
-		return 1;
-	}
+	char conffile[512];
+
+	find_config(conffile);
 
 	gtk_init(&argc, &argv);
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
@@ -886,7 +917,7 @@ main(int argc, char *argv[])
 		GTK_STYLE_PROVIDER(provider),
 		GTK_STYLE_PROVIDER_PRIORITY_USER);
 
-	int result = ini_parse(argv[1], config_ini_handler, NULL);
+	int result = ini_parse(conffile, config_ini_handler, NULL);
 	if (result == -1) {
 		g_printerr("Config file not found\n");
 		return 1;
