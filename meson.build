@@ -7,6 +7,13 @@ libm = cc.find_library('m', required: false)
 
 resources = gnome.compile_resources('megapixels-resources', 'org.postmarketos.Megapixels.gresource.xml')
 
+conf = configuration_data()
+conf.set_quoted('DATADIR', join_paths(get_option('prefix'), get_option('datadir')))
+conf.set_quoted('SYSCONFDIR', get_option('sysconfdir'))
+configure_file(
+  output: 'config.h',
+  configuration: conf )
+
 executable('megapixels', 'main.c', 'ini.c', 'bayer.c', 'quickdebayer.c', resources, dependencies : [gtkdep, libm], install : true)
 
 install_data(['org.postmarketos.Megapixels.desktop'],

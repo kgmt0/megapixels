@@ -12,7 +12,9 @@
 #include <linux/kdev_t.h>
 #include <sys/sysmacros.h>
 #include <asm/errno.h>
+#include <wordexp.h>
 #include <gtk/gtk.h>
+#include "config.h"
 #include "ini.h"
 #include "bayer.h"
 #include "quickdebayer.h"
@@ -847,17 +849,45 @@ int
 find_config(char *conffile)
 {
 	char buf[512];
+	char *xdg_config_home;
+	wordexp_t exp_result;
 	FILE *fp;
 
+	// Resolve XDG stuff
+	if ((xdg_config_home = getenv("XDG_CONFIG_HOME")) == NULL) {
+		xdg_config_home = "~/.config";
+	}
+	wordexp(xdg_config_home, &exp_result, 0);
+	xdg_config_home = strdup(exp_result.we_wordv[0]);
+	wordfree(&exp_result);
+
 	if(access("/proc/device-tree/compatible", F_OK) != -1) {
+		// Reads to compatible string of the current device tree, looks like:
+		// pine64,pinephone-1.2\0allwinner,sun50i-a64\0
 		fp = fopen("/proc/device-tree/compatible", "r");
 		fgets(buf, 512, fp);
 		fclose(fp);
-		sprintf(conffile, "/usr/share/megapixels/config/%s.ini", buf);
+
+		// Check for a config file in XDG_CONFIG_HOME
+		sprintf(conffile, "%s/megapixels/config/%s.ini", xdg_config_home, buf);
 		if(access(conffile, F_OK) != -1) {
 			printf("Found config file at %s\n", conffile);
 			return 0;
 		}
+
+		// Check user overridden /etc/megapixels/config/$dt.ini
+		sprintf(conffile, "%s/megapixels/config/%s.ini", SYSCONFDIR, buf);
+		if(access(conffile, F_OK) != -1) {
+			printf("Found config file at %s\n", conffile);
+			return 0;
+		}
+		// Check packaged /usr/share/megapixels/config/$dt.ini
+		sprintf(conffile, "%s/megapixels/config/%s.ini", DATADIR, buf);
+		if(access(conffile, F_OK) != -1) {
+			printf("Found config file at %s\n", conffile);
+			return 0;
+		}
+		// Check config/%dt.ini in the current working directory
 		sprintf(conffile, "config/%s.ini", buf);
 		if(access(conffile, F_OK) != -1) {
 			printf("Found config file at %s\n", conffile);
@@ -867,6 +897,8 @@ find_config(char *conffile)
 	} else {
 		printf("Could not read device name from device tree\n");
 	}
+
+	// If all else fails, fall back to /etc/megapixels.ini
 	conffile = "/etc/megapixels.ini";
 	if(access(conffile, F_OK) != -1) {
 		printf("Found config file at %s\n", conffile);
