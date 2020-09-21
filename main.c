@@ -412,7 +412,7 @@ process_image(const int *p, int size)
 		printf("Saving image\n");
 		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "95", NULL);
 		if (error != NULL) {
-			g_printerr(error->message);
+			g_printerr("%s\n", error->message);
 			g_clear_error(&error);
 		}
 	} else {
