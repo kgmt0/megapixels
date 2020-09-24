@@ -87,7 +87,7 @@
                           <object class="GtkImage">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="stock">gtk-preferences</property>
+                            <property name="resource">/org/postmarketos/Megapixels/settings-symbolic.svg</property>
                           </object>
                         </child>
                       </object>
@@ -146,7 +146,7 @@
                           <object class="GtkImage">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="stock">gtk-open</property>
+                            <property name="resource">/org/postmarketos/Megapixels/folder-symbolic.svg</property>
                           </object>
                         </child>
                       </object>
