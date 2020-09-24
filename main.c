@@ -74,12 +74,14 @@ static int current_is_rear = 1;
 static cairo_surface_t *surface = NULL;
 static int preview_width = -1;
 static int preview_height = -1;
+static char *last_path = NULL;
 
 // Widgets
 GtkWidget *preview;
 GtkWidget *error_box;
 GtkWidget *error_message;
 GtkWidget *main_stack;
+GtkWidget *thumb_last;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -374,6 +376,7 @@ process_image(const int *p, int size)
 	char timestamp[30];
 	GdkPixbuf *pixbuf;
 	GdkPixbuf *pixbufrot;
+	GdkPixbuf *thumb;
 	GError *error = NULL;
 	double scale;
 	cairo_t *cr;
@@ -413,7 +416,10 @@ process_image(const int *p, int size)
 		strftime(timestamp, 30, "%Y%m%d%H%M%S", &tim);
 		sprintf(fname, "%s/Pictures/IMG%s.jpg", getenv("HOME"), timestamp);
 		printf("Saving image\n");
+		thumb = gdk_pixbuf_scale_simple(pixbufrot, 24, 24, GDK_INTERP_BILINEAR);
+		gtk_image_set_from_pixbuf(GTK_IMAGE(thumb_last), thumb);
 		gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "95", NULL);
+		last_path = strdup(fname);
 		if (error != NULL) {
 			g_printerr("%s\n", error->message);
 			g_clear_error(&error);
@@ -813,6 +819,32 @@ find_media_fd()
 }
 
 void
+on_open_last_clicked(GtkWidget *widget, gpointer user_data)
+{
+	char uri[270];
+	GError *error = NULL;
+
+	if(!last_path) {
+		return;
+	}
+	sprintf(uri, "file://%s", last_path);
+	if(!g_app_info_launch_default_for_uri(uri, NULL, &error)){
+		g_printerr("Could not launch image viewer: %s\n", error->message);
+	}
+}
+
+void
+on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
+{
+	char uri[270];
+	GError *error = NULL;
+	sprintf(uri, "file://%s/Pictures", getenv("HOME"));
+	if(!g_app_info_launch_default_for_uri(uri, NULL, &error)){
+		g_printerr("Could not launch image viewer: %s\n", error->message);
+	}
+}
+
+void
 on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 {
 	capture = 1;
@@ -938,16 +970,21 @@ main(int argc, char *argv[])
 	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
 	GtkWidget *settings_back = GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
 	GtkWidget *error_close = GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
+	GtkWidget *open_last = GTK_WIDGET(gtk_builder_get_object(builder, "open_last"));
+	GtkWidget *open_directory = GTK_WIDGET(gtk_builder_get_object(builder, "open_directory"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
+	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked), NULL);
 	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
 	g_signal_connect(settings_btn, "clicked", G_CALLBACK(on_settings_btn_clicked), NULL);
 	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked), NULL);
+	g_signal_connect(open_last, "clicked", G_CALLBACK(on_open_last_clicked), NULL);
+	g_signal_connect(open_directory, "clicked", G_CALLBACK(on_open_directory_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
 	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
 
