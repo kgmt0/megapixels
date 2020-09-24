@@ -55,10 +55,13 @@
                     <property name="receives-default">True</property>
                     <property name="always-show-image">True</property>
                     <child>
-                      <placeholder/>
+                      <object class="GtkImage">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="resource">/org/postmarketos/Megapixels/shutter-button.svg</property>
+                      </object>
                     </child>
                     <style>
-                      <class name="suggested-action"/>
                       <class name="circular"/>
                     </style>
                   </object>

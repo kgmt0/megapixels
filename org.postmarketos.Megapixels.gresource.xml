@@ -4,5 +4,6 @@
     <file>camera.glade</file>
     <file>camera.css</file>
     <file>switch-camera.svg</file>
+    <file>shutter-button.svg</file>
   </gresource>
 </gresources>
