@@ -79,6 +79,7 @@ static int preview_height = -1;
 GtkWidget *preview;
 GtkWidget *error_box;
 GtkWidget *error_message;
+GtkWidget *main_stack;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -845,6 +846,18 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 	start_capturing(video_fd);
 }
 
+void
+on_settings_btn_clicked(GtkWidget *widget, gpointer user_data)
+{
+	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "settings");
+}
+
+void
+on_back_clicked(GtkWidget *widget, gpointer user_data)
+{
+	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "main");
+}
+
 int
 find_config(char *conffile)
 {
@@ -923,14 +936,18 @@ main(int argc, char *argv[])
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
 	GtkWidget *switch_btn = GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
 	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
+	GtkWidget *settings_back = GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
 	GtkWidget *error_close = GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
+	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked), NULL);
 	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
+	g_signal_connect(settings_btn, "clicked", G_CALLBACK(on_settings_btn_clicked), NULL);
+	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
 	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
 
