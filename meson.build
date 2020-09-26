@@ -1,6 +1,7 @@
 project('megapixels', 'c')
 gnome = import('gnome')
 gtkdep = dependency('gtk+-3.0')
+tiff = dependency('libtiff-4')
 
 cc = meson.get_compiler('c')
 libm = cc.find_library('m', required: false)
@@ -14,7 +15,7 @@ configure_file(
   output: 'config.h',
   configuration: conf )
 
-executable('megapixels', 'main.c', 'ini.c', 'bayer.c', 'quickdebayer.c', resources, dependencies : [gtkdep, libm], install : true)
+executable('megapixels', 'main.c', 'ini.c', 'quickdebayer.c', resources, dependencies : [gtkdep, libm, tiff], install : true)
 
 install_data(['org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
