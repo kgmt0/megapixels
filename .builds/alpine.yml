@@ -3,6 +3,7 @@ packages:
   - meson
   - samurai
   - gtk+3.0-dev
+  - tiff-dev
 tasks:
   - build: |
       cd megapixels
