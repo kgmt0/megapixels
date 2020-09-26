@@ -376,10 +376,12 @@ static void
 process_image(const int *p, int size)
 {
 	time_t rawtime;
+	char datetime[20] = {0};
 	struct tm tim;
 	uint8_t *pixels;
 	char fname[255];
 	char timestamp[30];
+	char uniquecameramodel[255];
 	GdkPixbuf *pixbuf;
 	GdkPixbuf *pixbufrot;
 	GdkPixbuf *thumb;
@@ -428,6 +430,7 @@ process_image(const int *p, int size)
 		time(&rawtime);
 		tim = *(localtime(&rawtime));
 		strftime(timestamp, 30, "%Y%m%d%H%M%S", &tim);
+		strftime(datetime, 20, "%Y:%m:%d %H:%M:%S", &tim);
 		sprintf(fname, "%s/Pictures/IMG%s-%d.dng", getenv("HOME"), timestamp, capture);
 
 		if(!(tif = TIFFOpen(fname, "w"))) {
@@ -443,16 +446,18 @@ process_image(const int *p, int size)
 		TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
 		TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
 		TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-		TIFFSetField(tif, TIFFTAG_MAKE, "PINE64");
-		TIFFSetField(tif, TIFFTAG_MODEL, "PinePhone");
+		TIFFSetField(tif, TIFFTAG_MAKE, exif_make);
+		TIFFSetField(tif, TIFFTAG_MODEL, exif_model);
 		TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+		TIFFSetField(tif, TIFFTAG_DATETIME, datetime);
 		TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 3);
 		TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
 		TIFFSetField(tif, TIFFTAG_SOFTWARE, "Megapixels");
 		TIFFSetField(tif, TIFFTAG_SUBIFD, 1, &sub_offset);
 		TIFFSetField(tif, TIFFTAG_DNGVERSION, "\001\001\0\0");
 		TIFFSetField(tif, TIFFTAG_DNGBACKWARDVERSION, "\001\0\0\0");
-		TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, "PINE64 PinePhone");
+		sprintf(uniquecameramodel, "%s %s", exif_make, exif_model);
+		TIFFSetField(tif, TIFFTAG_UNIQUECAMERAMODEL, uniquecameramodel);
 		if(current.colormatrix[0]) {
 			TIFFSetField(tif, TIFFTAG_COLORMATRIX1, 9, current.colormatrix);
 		} else {
