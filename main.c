@@ -48,6 +48,10 @@ struct camerainfo {
 	float forwardmatrix[9];
 	int blacklevel;
 	int whitelevel;
+
+	float focallength;
+	float cropfactor;
+	double fnumber;
 };
 
 static float colormatrix_srgb[] = {
@@ -373,6 +377,17 @@ init_device(int fd)
 }
 
 static void
+register_custom_tiff_tags(TIFF *tif)
+{
+	static const TIFFFieldInfo custom_fields[] = {
+		{TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1"},
+	};
+	
+	// Add missing dng fields
+	TIFFMergeFieldInfo(tif, custom_fields, sizeof(custom_fields) / sizeof(custom_fields[0]));
+}
+
+static void
 process_image(const int *p, int size)
 {
 	time_t rawtime;
@@ -391,11 +406,9 @@ process_image(const int *p, int size)
 	TIFF *tif;
 	int skip = 2;
 	long sub_offset = 0;
+	uint64 exif_offset = 0;
 	static const short cfapatterndim[] = {2, 2};
 	static const float neutral[] = {1.0, 1.0, 1.0};
-	static const TIFFFieldInfo custom_fields[] = {
-		{TIFFTAG_FORWARDMATRIX1, -1, -1, TIFF_SRATIONAL, FIELD_CUSTOM, 1, 1, "ForwardMatrix1"},
-	};
 
 	// Only process preview frames when not capturing
 	if (capture == 0) {
@@ -436,8 +449,6 @@ process_image(const int *p, int size)
 		if(!(tif = TIFFOpen(fname, "w"))) {
 			printf("Could not open tiff\n");
 		}
-		// Add missing dng fields
-		TIFFMergeFieldInfo(tif, custom_fields, sizeof(custom_fields) / sizeof(custom_fields[0]));
 
 		// Define TIFF thumbnail
 		TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 1);
@@ -495,6 +506,7 @@ process_image(const int *p, int size)
 		if(current.blacklevel) {
 			TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 1, &current.blacklevel);
 		}
+		TIFFCheckpointDirectory(tif);
 		printf("Writing frame\n");
 		
 		unsigned char *pLine = (unsigned char*)malloc(current.width);
@@ -502,6 +514,31 @@ process_image(const int *p, int size)
 			TIFFWriteScanline(tif, ((uint8_t *)p)+(row*current.width), row, 0);
 		}
 		free(pLine);
+		TIFFWriteDirectory(tif);
+
+		// Add an EXIF block to the tiff
+		TIFFCreateEXIFDirectory(tif);
+		// 1 = manual, 2 = full auto, 3 = aperture priority, 4 = shutter priority
+		TIFFSetField(tif, EXIFTAG_EXPOSUREPROGRAM, 2);
+		TIFFSetField(tif, EXIFTAG_DATETIMEORIGINAL, datetime);
+		TIFFSetField(tif, EXIFTAG_DATETIMEDIGITIZED, datetime);
+		if(current.fnumber) {
+			TIFFSetField(tif, EXIFTAG_FNUMBER, current.fnumber);
+		}
+		if(current.focallength) {
+			TIFFSetField(tif, EXIFTAG_FOCALLENGTH, current.focallength);
+		}
+		if(current.focallength && current.cropfactor) {
+			TIFFSetField(tif, EXIFTAG_FOCALLENGTHIN35MMFILM, (short)(current.focallength * current.cropfactor));
+		}
+		TIFFWriteCustomDirectory(tif, &exif_offset);
+		TIFFFreeDirectory(tif);
+
+		// Update exif pointer
+		TIFFSetDirectory(tif, 0);
+		TIFFSetField(tif, TIFFTAG_EXIFIFD, exif_offset);
+		TIFFRewriteDirectory(tif);
+
 		TIFFClose(tif);
 
 
@@ -702,6 +739,12 @@ config_ini_handler(void *user, const char *section, const char *name,
 			cc->whitelevel = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "blacklevel") == 0) {
 			cc->blacklevel = strtoint(value, NULL, 10);
+		} else if (strcmp(name, "focallength") == 0) {
+			cc->focallength = strtof(value, NULL);
+		} else if (strcmp(name, "cropfactor") == 0) {
+			cc->cropfactor = strtof(value, NULL);
+		} else if (strcmp(name, "fnumber") == 0) {
+			cc->fnumber = strtod(value, NULL);
 		} else {
 			g_printerr("Unknown key '%s' in [%s]\n", name, section);
 			exit(1);
@@ -1020,6 +1063,8 @@ main(int argc, char *argv[])
 	char conffile[512];
 
 	find_config(conffile);
+
+	TIFFSetTagExtender(register_custom_tiff_tags);
 
 	gtk_init(&argc, &argv);
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
