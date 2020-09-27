@@ -559,7 +559,6 @@ process_image(const int *p, int size)
 			}
 			thumb = gdk_pixbuf_scale_simple(pixbufrot, 24, 24, GDK_INTERP_BILINEAR);
 			gtk_image_set_from_pixbuf(GTK_IMAGE(thumb_last), thumb);
-			gdk_pixbuf_save(pixbufrot, fname, "jpeg", &error, "quality", "95", NULL);
 			last_path = strdup(fname);
 			if (error != NULL) {
 				g_printerr("%s\n", error->message);
