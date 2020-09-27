@@ -84,6 +84,8 @@ static cairo_surface_t *surface = NULL;
 static int preview_width = -1;
 static int preview_height = -1;
 static char *last_path = NULL;
+static int auto_exposure = 1;
+static int auto_gain = 1;
 
 // Widgets
 GtkWidget *preview;
@@ -265,11 +267,18 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 		fmt.format.width, fmt.format.height,
 		fmt.format.code);
 
-	// Placeholder, default is also 1
-	//v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
-	//v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
-	//v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE, height/24);
-	//v4l2_ctrl_set(fd, V4L2_CID_GAIN, 0);
+	if (auto_exposure) {
+		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
+	} else {
+		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE, height/2);
+	}
+	if (auto_gain) {
+		v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
+	} else {
+		v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
+		v4l2_ctrl_set(fd, V4L2_CID_GAIN, 0);
+	}
 	close(current.fd);
 	current.fd = fd;
 }
