@@ -48,6 +48,13 @@ These are the sections describing the sensors.
 * `rate=15` the refresh rate in fps to use for the sensor
 * `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor, only BGGR8 is fully supported
 * `rotate=90` the rotation angle to make the sensor match the screen
+* `colormatrix=` the DNG colormatrix1 attribute as 9 comma seperated floats
+* `forwardmatrix=` the DNG forwardmatrix1 attribute as 9 comma seperated floats
+* `blacklevel=10` The DNG blacklevel attribute for this camera
+* `whitelevel=255` The DNG whitelevel attribute for this camera
+* `focallength=3.33` The focal length of the camera, for EXIF
+* `cropfactor=10.81` The cropfactor for the sensor in the camera, for EXIF
+* `fnumber=3.0` The aperture size of the sensor, for EXIF
 
 # Post processing
 
