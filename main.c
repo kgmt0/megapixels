@@ -86,6 +86,9 @@ static int preview_height = -1;
 static char *last_path = NULL;
 static int auto_exposure = 1;
 static int auto_gain = 1;
+static int burst_length = 5;
+static char burst_dir[20];
+static char processing_script[512];
 
 // Widgets
 GtkWidget *preview;
@@ -404,6 +407,8 @@ process_image(const int *p, int size)
 	struct tm tim;
 	uint8_t *pixels;
 	char fname[255];
+	char fname_target[255];
+	char command[1024];
 	char timestamp[30];
 	char uniquecameramodel[255];
 	GdkPixbuf *pixbuf;
@@ -453,7 +458,9 @@ process_image(const int *p, int size)
 		tim = *(localtime(&rawtime));
 		strftime(timestamp, 30, "%Y%m%d%H%M%S", &tim);
 		strftime(datetime, 20, "%Y:%m:%d %H:%M:%S", &tim);
-		sprintf(fname, "%s/Pictures/IMG%s-%d.dng", getenv("HOME"), timestamp, capture);
+
+		sprintf(fname_target, "%s/Pictures/IMG%s", getenv("HOME"), timestamp);
+		sprintf(fname, "%s/%d.dng", burst_dir, burst_length - capture);
 
 		if(!(tif = TIFFOpen(fname, "w"))) {
 			printf("Could not open tiff\n");
@@ -516,7 +523,7 @@ process_image(const int *p, int size)
 			TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 1, &current.blacklevel);
 		}
 		TIFFCheckpointDirectory(tif);
-		printf("Writing frame\n");
+		printf("Writing frame to %s\n", fname);
 		
 		unsigned char *pLine = (unsigned char*)malloc(current.width);
 		for(int row = 0; row < current.height; row++){
@@ -551,8 +558,8 @@ process_image(const int *p, int size)
 		TIFFClose(tif);
 
 
-		// Update the thumbnail if this is the last frame
 		if (capture == 0) {
+			// Update the thumbnail if this is the last frame
 			pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current.width / (skip*2), current.height / (skip*2));
 			pixels = gdk_pixbuf_get_pixels(pixbuf);
 			quick_debayer_bggr8((const uint8_t *)p, pixels, current.width, current.height, skip);
@@ -573,6 +580,12 @@ process_image(const int *p, int size)
 				g_printerr("%s\n", error->message);
 				g_clear_error(&error);
 			}
+
+			// Start post-processing the captured burst
+			g_printerr("Post process %s to %s.ext\n", burst_dir, fname_target);
+			sprintf(command, "%s %s %s &", processing_script, burst_dir, fname_target);
+			system(command);
+
 		}
 	} 
 }
@@ -959,7 +972,18 @@ on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
 void
 on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 {
-	capture = 5;
+	char template[] = "/tmp/megapixels.XXXXXX";
+	char *tempdir;
+	tempdir = mkdtemp(template);
+
+	if (tempdir == NULL) {
+		g_printerr("Could not make capture directory %s\n", template);
+		exit (EXIT_FAILURE);
+	}
+
+	strcpy(burst_dir, tempdir);
+
+	capture = burst_length;
 }
 
 void
@@ -1066,11 +1090,68 @@ find_config(char *conffile)
 }
 
 int
+find_processor(char *script)
+{
+	char *xdg_config_home;
+	char filename[] = "postprocess.sh";
+	wordexp_t exp_result;
+
+	// Resolve XDG stuff
+	if ((xdg_config_home = getenv("XDG_CONFIG_HOME")) == NULL) {
+		xdg_config_home = "~/.config";
+	}
+	wordexp(xdg_config_home, &exp_result, 0);
+	xdg_config_home = strdup(exp_result.we_wordv[0]);
+	wordfree(&exp_result);
+
+	// Check postprocess.h in the current working directory
+	sprintf(script, "%s", filename);
+	if(access(script, F_OK) != -1) {
+		sprintf(script, "./%s", filename);
+		printf("Found postprocessor script at %s\n", script);
+		return 0;
+	}
+
+	// Check for a script in XDG_CONFIG_HOME
+	sprintf(script, "%s/megapixels/%s", xdg_config_home, filename);
+	if(access(script, F_OK) != -1) {
+		printf("Found postprocessor script at %s\n", script);
+		return 0;
+	}
+
+	// Check user overridden /etc/megapixels/postprocessor.sh
+	sprintf(script, "%s/megapixels/%s", SYSCONFDIR, filename);
+	if(access(script, F_OK) != -1) {
+		printf("Found postprocessor script at %s\n", script);
+		return 0;
+	}
+
+	// Check packaged /usr/share/megapixels/postprocessor.sh
+	sprintf(script, "%s/megapixels/%s", DATADIR, filename);
+	if(access(script, F_OK) != -1) {
+		printf("Found postprocessor script at %s\n", script);
+		return 0;
+	}
+
+	return -1;
+}
+
+int
 main(int argc, char *argv[])
 {
+	int ret;
 	char conffile[512];
 
-	find_config(conffile);
+	ret = find_config(conffile);
+	if (ret) {
+		g_printerr("Could not find any config file\n");
+		return ret;
+	}
+	ret = find_processor(processing_script);
+	if (ret) {
+		g_printerr("Could not find any post-process script\n");
+		return ret;
+	}
 
 	TIFFSetTagExtender(register_custom_tiff_tags);
 

@@ -31,3 +31,7 @@ install_data([
   'config/pine64,pinetab.ini',
   ],
   install_dir : get_option('datadir') / 'megapixels/config/')
+
+install_data(['postprocess.sh'],
+  install_dir : get_option('datadir') / 'megapixels/',
+  install_mode: 'rwxr-xr-x')
