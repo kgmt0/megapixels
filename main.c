@@ -90,7 +90,7 @@ static char *last_path = NULL;
 static int auto_exposure = 1;
 static int auto_gain = 1;
 static int burst_length = 5;
-static char burst_dir[20];
+static char burst_dir[23];
 static char processing_script[512];
 
 // Widgets

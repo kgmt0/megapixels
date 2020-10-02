@@ -45,6 +45,16 @@ if [ -n "$DCRAW" ]; then
 	if command -v convert &> /dev/null
 	then
 		convert "$BURST_DIR"/1.dng.tiff "$TARGET_NAME.jpg"
+
+		# If exiftool is installed copy the exif data over from the tiff to the jpeg
+		# since imagemagick is stupid
+		if command -v exiftool &> /dev/null
+		then
+			exiftool -tagsFromfile "$BURST_DIR"/1.dng.tiff \
+				 -software="Megapixels" \
+				 -overwrite_original "$TARGET_NAME.jpg"
+		fi
+
 	else
 		cp "$BURST_DIR"/1.dng.tiff "$TARGET_NAME.tiff"
 	fi
