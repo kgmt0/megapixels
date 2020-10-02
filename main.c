@@ -52,6 +52,9 @@ struct camerainfo {
 	float focallength;
 	float cropfactor;
 	double fnumber;
+
+	int has_af_c;
+	int has_af_s;
 };
 
 static float colormatrix_srgb[] = {
@@ -233,6 +236,26 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 	return 0;
 }
 
+static int
+v4l2_has_control(int fd, int control_id)
+{
+	struct v4l2_queryctrl queryctrl;
+	int ret;
+
+	memset(&queryctrl, 0, sizeof(queryctrl));
+
+	queryctrl.id = control_id;
+	ret = xioctl(fd, VIDIOC_QUERYCTRL, &queryctrl);
+	if (ret)
+		return 0;
+
+	if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED) {
+		return 0;
+	}
+
+	return 1;
+}
+
 static void
 init_sensor(char *fn, int width, int height, int mbus, int rate)
 {
@@ -269,6 +292,15 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 	g_printerr("Driver returned %dx%d fmt %d\n",
 		fmt.format.width, fmt.format.height,
 		fmt.format.code);
+
+	// Trigger continuous auto focus if the sensor supports it
+	if (v4l2_has_control(fd, V4L2_CID_FOCUS_AUTO)) {
+		current.has_af_c = 1;
+		v4l2_ctrl_set(fd, V4L2_CID_FOCUS_AUTO, 1);
+	}
+	if (v4l2_has_control(fd, V4L2_CID_AUTO_FOCUS_START)) {
+		current.has_af_s = 1;
+	}
 
 	if (auto_exposure) {
 		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
