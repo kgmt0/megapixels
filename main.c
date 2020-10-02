@@ -260,8 +260,8 @@ static void
 init_sensor(char *fn, int width, int height, int mbus, int rate)
 {
 	int fd;
-	struct v4l2_subdev_frame_interval interval;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_frame_interval interval = {};
+	struct v4l2_subdev_format fmt = {};
 	fd = open(fn, O_RDWR);
 
 	g_printerr("Setting sensor rate to %d\n", rate);
@@ -484,6 +484,7 @@ process_image(const int *p, int size)
 		cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_NONE);
 		cairo_paint(cr);
 		gtk_widget_queue_draw_area(preview, 0, 0, preview_width, preview_height);
+		cairo_destroy(cr);
 	} else {
 		capture--;
 		time(&rawtime);
@@ -613,13 +614,17 @@ process_image(const int *p, int size)
 				g_clear_error(&error);
 			}
 
+			g_object_unref(pixbuf);
+
 			// Start post-processing the captured burst
 			g_printerr("Post process %s to %s.ext\n", burst_dir, fname_target);
 			sprintf(command, "%s %s %s &", processing_script, burst_dir, fname_target);
 			system(command);
 
 		}
-	} 
+	}
+	g_object_unref(pixbufrot);
+	g_object_unref(pixbuf);
 }
 
 static gboolean
