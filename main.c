@@ -485,6 +485,8 @@ process_image(const int *p, int size)
 		cairo_paint(cr);
 		gtk_widget_queue_draw_area(preview, 0, 0, preview_width, preview_height);
 		cairo_destroy(cr);
+		g_object_unref(pixbufrot);
+		g_object_unref(pixbuf);
 	} else {
 		capture--;
 		time(&rawtime);
@@ -614,6 +616,7 @@ process_image(const int *p, int size)
 				g_clear_error(&error);
 			}
 
+			g_object_unref(pixbufrot);
 			g_object_unref(pixbuf);
 
 			// Start post-processing the captured burst
@@ -623,8 +626,6 @@ process_image(const int *p, int size)
 
 		}
 	}
-	g_object_unref(pixbufrot);
-	g_object_unref(pixbuf);
 }
 
 static gboolean
