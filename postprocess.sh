@@ -42,9 +42,10 @@ if [ -n "$DCRAW" ]; then
 	# -fbdd 1	Raw denoising with FBDD
 	$DCRAW +M -H 4 -o 1 -q 3 -T -fbdd 1 $BURST_DIR/1.dng
 
+	# If imagemagick is available, convert the tiff to jpeg and apply slight sharpening
 	if command -v convert &> /dev/null
 	then
-		convert "$BURST_DIR"/1.dng.tiff "$TARGET_NAME.jpg"
+		convert "$BURST_DIR"/1.dng.tiff -sharpen 0x1.0 "$TARGET_NAME.jpg"
 
 		# If exiftool is installed copy the exif data over from the tiff to the jpeg
 		# since imagemagick is stupid
