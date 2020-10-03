@@ -51,6 +51,11 @@ struct camerainfo {
 	float focallength;
 	float cropfactor;
 	double fnumber;
+	int iso_min;
+	int iso_max;
+
+	int gain_ctrl;
+	int gain_max;
 
 	int has_af_c;
 	int has_af_s;
@@ -128,6 +133,23 @@ show_error(const char *s)
 {
 	gtk_label_set_text(GTK_LABEL(error_message), s);
 	gtk_widget_show(error_box);
+}
+
+int
+remap(int value, int input_min, int input_max, int output_min, int output_max)
+{
+	const long long factor = 1000000000;
+	long long output_spread = output_max - output_min;
+	long long input_spread = input_max - input_min;
+
+	long long zero_value = value - input_min;
+	zero_value *= factor;
+	long long percentage = zero_value / input_spread;
+
+	long long zero_output = percentage * output_spread / factor;
+
+	long long result = output_min + zero_output;
+	return (int)result;
 }
 
 static void
@@ -256,6 +278,26 @@ v4l2_ctrl_get(int fd, uint32_t id)
 }
 
 static int
+v4l2_ctrl_get_max(int fd, uint32_t id)
+{
+	struct v4l2_queryctrl queryctrl;
+	int ret;
+
+	memset(&queryctrl, 0, sizeof(queryctrl));
+
+	queryctrl.id = id;
+	ret = xioctl(fd, VIDIOC_QUERYCTRL, &queryctrl);
+	if (ret)
+		return 0;
+
+	if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED) {
+		return 0;
+	}
+
+	return queryctrl.maximum;
+}
+
+static int
 v4l2_has_control(int fd, int control_id)
 {
 	struct v4l2_queryctrl queryctrl;
@@ -280,6 +322,7 @@ draw_controls()
 {
 	cairo_t *cr;
 	char iso[6];
+	int temp;
 	char shutterangle[6];
 
 	if (auto_exposure) {
@@ -291,7 +334,8 @@ draw_controls()
 	if (auto_gain) {
 		sprintf(iso, "auto");
 	} else {
-		sprintf(iso, "%d", gain);
+		temp = remap(gain - 1, 0, current.gain_max, current.iso_min, current.iso_max);
+		sprintf(iso, "%d", temp);
 	}
 
 	if (status_surface)
@@ -394,6 +438,16 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 	}
 	if (v4l2_has_control(fd, V4L2_CID_AUTO_FOCUS_START)) {
 		current.has_af_s = 1;
+	}
+
+	if (v4l2_has_control(fd, V4L2_CID_GAIN)) {
+		current.gain_ctrl = V4L2_CID_GAIN;
+		current.gain_max = v4l2_ctrl_get_max(fd, V4L2_CID_GAIN);
+	}
+
+	if (v4l2_has_control(fd, V4L2_CID_ANALOGUE_GAIN)) {
+		current.gain_ctrl = V4L2_CID_ANALOGUE_GAIN;
+		current.gain_max = v4l2_ctrl_get_max(fd, V4L2_CID_ANALOGUE_GAIN);
 	}
 
 	auto_exposure = 1;
@@ -541,6 +595,7 @@ process_image(const int *p, int size)
 	uint64 exif_offset = 0;
 	static const short cfapatterndim[] = {2, 2};
 	static const float neutral[] = {1.0, 1.0, 1.0};
+	static uint16_t isospeed[] = {0};
 
 	// Only process preview frames when not capturing
 	if (capture == 0) {
@@ -591,6 +646,10 @@ process_image(const int *p, int size)
 		sprintf(fname_target, "%s/Pictures/IMG%s", getenv("HOME"), timestamp);
 		sprintf(fname, "%s/%d.dng", burst_dir, burst_length - capture);
 
+		// Get latest exposure and gain now the auto gain/exposure is disabled while capturing
+		gain = v4l2_ctrl_get(current.fd, current.gain_ctrl);
+		exposure = v4l2_ctrl_get(current.fd, V4L2_CID_EXPOSURE);
+
 		if(!(tif = TIFFOpen(fname, "w"))) {
 			printf("Could not open tiff\n");
 		}
@@ -634,7 +693,6 @@ process_image(const int *p, int size)
 		}
 		TIFFWriteDirectory(tif);
 
-
 		// Define main photo
 		TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
 		TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, current.width);
@@ -664,7 +722,17 @@ process_image(const int *p, int size)
 		// Add an EXIF block to the tiff
 		TIFFCreateEXIFDirectory(tif);
 		// 1 = manual, 2 = full auto, 3 = aperture priority, 4 = shutter priority
-		TIFFSetField(tif, EXIFTAG_EXPOSUREPROGRAM, 2);
+		if (auto_exposure) {
+			TIFFSetField(tif, EXIFTAG_EXPOSUREPROGRAM, 2);
+		} else {
+			TIFFSetField(tif, EXIFTAG_EXPOSUREPROGRAM, 1);
+		}
+
+		TIFFSetField(tif, EXIFTAG_EXPOSURETIME, (1.0/current.rate) / ((float)current.height / (float)exposure));
+		isospeed[0] = (uint16_t)remap(gain - 1, 0, current.gain_max, current.iso_min, current.iso_max);
+		TIFFSetField(tif, EXIFTAG_ISOSPEEDRATINGS, 1, isospeed);
+		TIFFSetField(tif, EXIFTAG_FLASH, 0);
+
 		TIFFSetField(tif, EXIFTAG_DATETIMEORIGINAL, datetime);
 		TIFFSetField(tif, EXIFTAG_DATETIMEDIGITIZED, datetime);
 		if(current.fnumber) {
@@ -717,6 +785,14 @@ process_image(const int *p, int size)
 			g_printerr("Post process %s to %s.ext\n", burst_dir, fname_target);
 			sprintf(command, "%s %s %s &", processing_script, burst_dir, fname_target);
 			system(command);
+
+			// Restore the auto exposure and gain if needed
+			if (auto_exposure) {
+				v4l2_ctrl_set(current.fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
+			}
+			if (auto_gain) {
+				v4l2_ctrl_set(current.fd, V4L2_CID_AUTOGAIN, 1);
+			}
 
 		}
 	}
@@ -902,6 +978,10 @@ config_ini_handler(void *user, const char *section, const char *name,
 			cc->cropfactor = strtof(value, NULL);
 		} else if (strcmp(name, "fnumber") == 0) {
 			cc->fnumber = strtod(value, NULL);
+		} else if (strcmp(name, "iso-min") == 0) {
+			cc->iso_min = strtod(value, NULL);
+		} else if (strcmp(name, "iso-max") == 0) {
+			cc->iso_max = strtod(value, NULL);
 		} else {
 			g_printerr("Unknown key '%s' in [%s]\n", name, section);
 			exit(1);
@@ -1118,6 +1198,10 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 	}
 
 	strcpy(burst_dir, tempdir);
+	
+	// Disable the autogain/exposure while taking the burst
+	v4l2_ctrl_set(current.fd, V4L2_CID_AUTOGAIN, 0);
+	v4l2_ctrl_set(current.fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
 
 	capture = burst_length;
 }
@@ -1142,8 +1226,8 @@ on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 			current_control = USER_CONTROL_ISO;
 			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), auto_gain);
-			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 1.0);
-			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), 1024.0);
+			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 0.0);
+			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), (float)current.gain_max);
 			gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)gain);
 
 		} else if (event->x > 60 && event->x < 120) {
@@ -1243,7 +1327,7 @@ on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 	switch (current_control) {
 		case USER_CONTROL_ISO:
 			gain = (int)value;
-			v4l2_ctrl_set(current.fd, V4L2_CID_GAIN, gain);
+			v4l2_ctrl_set(current.fd, current.gain_ctrl, gain);
 			break;
 		case USER_CONTROL_SHUTTER:
 			exposure = (int)(value / 360.0 * current.height);
