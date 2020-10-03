@@ -19,10 +19,9 @@
 #include "ini.h"
 #include "quickdebayer.h"
 
-enum io_method {
-	IO_METHOD_READ,
-	IO_METHOD_MMAP,
-	IO_METHOD_USERPTR,
+enum user_control {
+	USER_CONTROL_ISO,
+	USER_CONTROL_SHUTTER
 };
 
 #define TIFFTAG_FORWARDMATRIX1 50964
@@ -95,13 +94,17 @@ static int gain = 1;
 static int burst_length = 5;
 static char burst_dir[23];
 static char processing_script[512];
-
+static enum user_control current_control;
 // Widgets
 GtkWidget *preview;
 GtkWidget *error_box;
 GtkWidget *error_message;
 GtkWidget *main_stack;
 GtkWidget *thumb_last;
+GtkWidget *control_box;
+GtkWidget *control_name;
+GtkWidget *control_slider;
+GtkWidget *control_auto;
 
 static int
 xioctl(int fd, int request, void *arg)
@@ -1114,6 +1117,50 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 void
+on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
+{
+	if (event->type != GDK_BUTTON_PRESS)
+		return;
+
+	// Handle taps on the controls
+	if (event->y < 32) {
+		if (gtk_widget_is_visible(control_box)) {
+			gtk_widget_hide(control_box);
+			return;
+		} else {
+			gtk_widget_show(control_box);
+		}
+
+		if (event->x < 60 ) {
+			// ISO
+			current_control = USER_CONTROL_ISO;
+			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), auto_gain);
+			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 1.0);
+			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), 1024.0);
+			gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)gain);
+
+		} else if (event->x > 60 && event->x < 120) {
+			// Shutter angle
+			current_control = USER_CONTROL_SHUTTER;
+			gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), auto_exposure);
+			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 1.0);
+			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), 360.0);
+			gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)exposure);
+		}
+
+		return;
+	}
+
+	// Tapped preview image itself, try focussing
+	if (current.has_af_s) {
+		v4l2_ctrl_set(current.fd, V4L2_CID_AUTO_FOCUS_STOP, 1);
+		v4l2_ctrl_set(current.fd, V4L2_CID_AUTO_FOCUS_START, 1);
+	}
+}
+
+void
 on_error_close_clicked(GtkWidget *widget, gpointer user_data)
 {
 	gtk_widget_hide(error_box);
@@ -1151,6 +1198,49 @@ void
 on_back_clicked(GtkWidget *widget, gpointer user_data)
 {
 	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "main");
+}
+
+void
+on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
+{
+	int fd = current.fd;
+	switch (current_control) {
+		case USER_CONTROL_ISO:
+			auto_gain = gtk_toggle_button_get_active(widget);
+			if (auto_gain) {
+				v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
+			} else {
+				v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
+			}
+			break;
+		case USER_CONTROL_SHUTTER:
+			auto_exposure = gtk_toggle_button_get_active(widget);
+			if (auto_exposure) {
+				v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
+			} else {
+				v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+			}
+			break;
+	}
+	draw_controls();
+}
+
+void
+on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
+{
+	double value = gtk_adjustment_get_value(widget);
+
+	switch (current_control) {
+		case USER_CONTROL_ISO:
+			gain = (int)value;
+			v4l2_ctrl_set(current.fd, V4L2_CID_GAIN, gain);
+			break;
+		case USER_CONTROL_SHUTTER:
+			exposure = (int)(value / 360.0 * current.height);
+			v4l2_ctrl_set(current.fd, V4L2_CID_EXPOSURE, exposure);
+			break;
+	}
+	draw_controls();
 }
 
 int
@@ -1300,6 +1390,10 @@ main(int argc, char *argv[])
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
+	control_box = GTK_WIDGET(gtk_builder_get_object(builder, "control_box"));
+	control_name = GTK_WIDGET(gtk_builder_get_object(builder, "control_name"));
+	control_slider = GTK_WIDGET(gtk_builder_get_object(builder, "control_adj"));
+	control_auto = GTK_WIDGET(gtk_builder_get_object(builder, "control_auto"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked), NULL);
@@ -1310,6 +1404,11 @@ main(int argc, char *argv[])
 	g_signal_connect(open_directory, "clicked", G_CALLBACK(on_open_directory_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
 	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
+	gtk_widget_set_events(preview, gtk_widget_get_events(preview) |
+			GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK);
+	g_signal_connect(preview, "button-press-event", G_CALLBACK(on_preview_tap), NULL);
+	g_signal_connect(control_auto, "toggled", G_CALLBACK(on_control_auto_toggled), NULL);
+	g_signal_connect(control_slider, "value-changed", G_CALLBACK(on_control_slider_changed), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
 	if (access("camera.css", F_OK) != -1) {
