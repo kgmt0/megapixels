@@ -243,6 +243,19 @@ v4l2_ctrl_set(int fd, uint32_t id, int val)
 }
 
 static int
+v4l2_ctrl_get(int fd, uint32_t id)
+{
+	struct v4l2_control ctrl = {0};
+	ctrl.id = id;
+
+	if (xioctl(fd, VIDIOC_G_CTRL, &ctrl) == -1) {
+		g_printerr("Failed to get control %d\n", id);
+		return -1;
+	}
+	return ctrl.value;
+}
+
+static int
 v4l2_has_control(int fd, int control_id)
 {
 	struct v4l2_queryctrl queryctrl;
@@ -260,6 +273,81 @@ v4l2_has_control(int fd, int control_id)
 	}
 
 	return 1;
+}
+
+static void
+draw_controls()
+{
+	cairo_t *cr;
+	char iso[6];
+	char shutterangle[6];
+
+	if (auto_exposure) {
+		sprintf(shutterangle, "auto");
+	} else {
+		sprintf(shutterangle, "%d", exposure);
+	}
+
+	if (auto_gain) {
+		sprintf(iso, "auto");
+	} else {
+		sprintf(iso, "%d", gain);
+	}
+
+	if (status_surface)
+		cairo_surface_destroy(status_surface);
+
+	// Make a service to show status of controls, 32px high
+	status_surface = gdk_window_create_similar_surface(gtk_widget_get_window(preview),
+		CAIRO_CONTENT_COLOR_ALPHA,
+		preview_width, 32);
+
+	cr = cairo_create(status_surface);
+	cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
+	cairo_paint(cr);
+
+	// Draw the outlines for the headings
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 9);
+	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	cairo_move_to(cr, 16, 16);
+	cairo_text_path(cr, "ISO");
+	cairo_stroke(cr);
+
+	cairo_move_to(cr, 60, 16);
+	cairo_text_path(cr, "Shutter");
+	cairo_stroke(cr);
+
+	// Draw the fill for the headings
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_move_to(cr, 16, 16);
+	cairo_show_text(cr, "ISO");
+	cairo_move_to(cr, 60, 16);
+	cairo_show_text(cr, "Shutter");
+
+	// Draw the outlines for the values
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_set_font_size(cr, 11);
+	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	cairo_move_to(cr, 16, 26);
+	cairo_text_path(cr, iso);
+	cairo_stroke(cr);
+
+	cairo_move_to(cr, 60, 26);
+	cairo_text_path(cr, shutterangle);
+	cairo_stroke(cr);
+
+	// Draw the fill for the values
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_move_to(cr, 16, 26);
+	cairo_show_text(cr, iso);
+	cairo_move_to(cr, 60, 26);
+	cairo_show_text(cr, shutterangle);
+
+	cairo_destroy(cr);
+	
 }
 
 static void
@@ -308,18 +396,10 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 		current.has_af_s = 1;
 	}
 
-	if (auto_exposure) {
-		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
-	} else {
-		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
-		v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE, height/2);
-	}
-	if (auto_gain) {
-		v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
-	} else {
-		v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
-		v4l2_ctrl_set(fd, V4L2_CID_GAIN, 0);
-	}
+	auto_exposure = 1;
+	auto_gain = 1;
+	draw_controls();
+
 	close(current.fd);
 	current.fd = fd;
 }
@@ -650,80 +730,6 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	return FALSE;
 }
 
-static void
-draw_controls()
-{
-	cairo_t *cr;
-	char iso[6];
-	char shutterangle[6];
-
-	if (auto_exposure) {
-		sprintf(shutterangle, "auto");
-	} else {
-		sprintf(shutterangle, "%d", exposure);
-	}
-
-	if (auto_gain) {
-		sprintf(iso, "auto");
-	} else {
-		sprintf(iso, "%d", gain);
-	}
-
-	if (status_surface)
-		cairo_surface_destroy(status_surface);
-
-	// Make a service to show status of controls, 32px high
-	status_surface = gdk_window_create_similar_surface(gtk_widget_get_window(preview),
-		CAIRO_CONTENT_COLOR_ALPHA,
-		preview_width, 32);
-
-	cr = cairo_create(status_surface);
-	cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
-	cairo_paint(cr);
-
-	// Draw the outlines for the headings
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-	cairo_set_font_size(cr, 9);
-	cairo_set_source_rgba(cr, 0, 0, 0, 1);
-
-	cairo_move_to(cr, 16, 16);
-	cairo_text_path(cr, "ISO");
-	cairo_stroke(cr);
-
-	cairo_move_to(cr, 60, 16);
-	cairo_text_path(cr, "Shutter");
-	cairo_stroke(cr);
-
-	// Draw the fill for the headings
-	cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	cairo_move_to(cr, 16, 16);
-	cairo_show_text(cr, "ISO");
-	cairo_move_to(cr, 60, 16);
-	cairo_show_text(cr, "Shutter");
-
-	// Draw the outlines for the values
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, 11);
-	cairo_set_source_rgba(cr, 0, 0, 0, 1);
-
-	cairo_move_to(cr, 16, 26);
-	cairo_text_path(cr, iso);
-	cairo_stroke(cr);
-
-	cairo_move_to(cr, 60, 26);
-	cairo_text_path(cr, shutterangle);
-	cairo_stroke(cr);
-
-	// Draw the fill for the values
-	cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	cairo_move_to(cr, 16, 26);
-	cairo_show_text(cr, iso);
-	cairo_move_to(cr, 60, 26);
-	cairo_show_text(cr, shutterangle);
-
-	cairo_destroy(cr);
-	
-}
 
 static gboolean
 preview_configure(GtkWidget *widget, GdkEventConfigure *event)
@@ -1211,6 +1217,8 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 				v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 1);
 			} else {
 				v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
+				gain = v4l2_ctrl_get(fd, V4L2_CID_GAIN);
+				gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)gain);
 			}
 			break;
 		case USER_CONTROL_SHUTTER:
@@ -1219,6 +1227,8 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 				v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
 			} else {
 				v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+				exposure = v4l2_ctrl_get(fd, V4L2_CID_EXPOSURE);
+				gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)exposure);
 			}
 			break;
 	}
