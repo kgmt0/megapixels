@@ -84,11 +84,14 @@ static int ready = 0;
 static int capture = 0;
 static int current_is_rear = 1;
 static cairo_surface_t *surface = NULL;
+static cairo_surface_t *status_surface = NULL;
 static int preview_width = -1;
 static int preview_height = -1;
 static char *last_path = NULL;
 static int auto_exposure = 1;
+static int exposure = 1;
 static int auto_gain = 1;
+static int gain = 1;
 static int burst_length = 5;
 static char burst_dir[23];
 static char processing_script[512];
@@ -475,6 +478,7 @@ process_image(const int *p, int size)
 			pixbufrot = gdk_pixbuf_rotate_simple(pixbuf, GDK_PIXBUF_ROTATE_CLOCKWISE);
 		}
 
+		// Draw preview image
 		scale = (double) preview_width / gdk_pixbuf_get_width(pixbufrot);
 		cr = cairo_create(surface);
 		cairo_set_source_rgb(cr, 0, 0, 0);
@@ -483,6 +487,13 @@ process_image(const int *p, int size)
 		gdk_cairo_set_source_pixbuf(cr, pixbufrot, 0, 0);
 		cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_NONE);
 		cairo_paint(cr);
+
+		// Draw controls over preview
+		cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+		cairo_set_source_surface(cr, status_surface, 0, 0);
+		cairo_paint(cr);
+
+		// Queue gtk3 repaint of the preview area
 		gtk_widget_queue_draw_area(preview, 0, 0, preview_width, preview_height);
 		cairo_destroy(cr);
 		g_object_unref(pixbufrot);
@@ -636,6 +647,81 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	return FALSE;
 }
 
+static void
+draw_controls()
+{
+	cairo_t *cr;
+	char iso[6];
+	char shutterangle[6];
+
+	if (auto_exposure) {
+		sprintf(shutterangle, "auto");
+	} else {
+		sprintf(shutterangle, "%d", exposure);
+	}
+
+	if (auto_gain) {
+		sprintf(iso, "auto");
+	} else {
+		sprintf(iso, "%d", gain);
+	}
+
+	if (status_surface)
+		cairo_surface_destroy(status_surface);
+
+	// Make a service to show status of controls, 32px high
+	status_surface = gdk_window_create_similar_surface(gtk_widget_get_window(preview),
+		CAIRO_CONTENT_COLOR_ALPHA,
+		preview_width, 32);
+
+	cr = cairo_create(status_surface);
+	cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
+	cairo_paint(cr);
+
+	// Draw the outlines for the headings
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 9);
+	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	cairo_move_to(cr, 16, 16);
+	cairo_text_path(cr, "ISO");
+	cairo_stroke(cr);
+
+	cairo_move_to(cr, 60, 16);
+	cairo_text_path(cr, "Shutter");
+	cairo_stroke(cr);
+
+	// Draw the fill for the headings
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_move_to(cr, 16, 16);
+	cairo_show_text(cr, "ISO");
+	cairo_move_to(cr, 60, 16);
+	cairo_show_text(cr, "Shutter");
+
+	// Draw the outlines for the values
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_set_font_size(cr, 11);
+	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	cairo_move_to(cr, 16, 26);
+	cairo_text_path(cr, iso);
+	cairo_stroke(cr);
+
+	cairo_move_to(cr, 60, 26);
+	cairo_text_path(cr, shutterangle);
+	cairo_stroke(cr);
+
+	// Draw the fill for the values
+	cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	cairo_move_to(cr, 16, 26);
+	cairo_show_text(cr, iso);
+	cairo_move_to(cr, 60, 26);
+	cairo_show_text(cr, shutterangle);
+
+	cairo_destroy(cr);
+	
+}
+
 static gboolean
 preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 {
@@ -656,6 +742,9 @@ preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 	cairo_set_source_rgb(cr, 0, 0, 0);
 	cairo_paint(cr);
 	cairo_destroy(cr);
+
+	draw_controls();
+
 	return TRUE;
 }
 
