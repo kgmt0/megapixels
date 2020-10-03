@@ -27,10 +27,13 @@ DCRAW=""
 if command -v "dcraw_emu" &> /dev/null
 then
 	DCRAW=dcraw_emu
+	# -fbdd 1	Raw denoising with FBDD
+	set -- -fbdd 1
 fi
 if command -v "dcraw" &> /dev/null
 then
 	DCRAW=dcraw
+	set --
 fi
 
 if [ -n "$DCRAW" ]; then
@@ -39,8 +42,7 @@ if [ -n "$DCRAW" ]; then
 	# -o 1		Output in sRGB colorspace
 	# -q 3		Debayer with AHD algorithm
 	# -T		Output TIFF
-	# -fbdd 1	Raw denoising with FBDD
-	$DCRAW +M -H 4 -o 1 -q 3 -T -fbdd 1 $BURST_DIR/1.dng
+	$DCRAW +M -H 4 -o 1 -q 3 -T "$@" $BURST_DIR/1.dng
 
 	# If imagemagick is available, convert the tiff to jpeg and apply slight sharpening
 	if command -v convert &> /dev/null
