@@ -328,7 +328,8 @@ draw_controls()
 	if (auto_exposure) {
 		sprintf(shutterangle, "auto");
 	} else {
-		sprintf(shutterangle, "%d", exposure);
+		temp = (int)((float)exposure / (float)current.height * 360);
+		sprintf(shutterangle, "%d\u00b0", temp);
 	}
 
 	if (auto_gain) {
@@ -1330,6 +1331,7 @@ on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 			v4l2_ctrl_set(current.fd, current.gain_ctrl, gain);
 			break;
 		case USER_CONTROL_SHUTTER:
+			// So far all sensors use exposure time in number of sensor rows
 			exposure = (int)(value / 360.0 * current.height);
 			v4l2_ctrl_set(current.fd, V4L2_CID_EXPOSURE, exposure);
 			break;
