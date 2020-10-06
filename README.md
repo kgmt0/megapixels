@@ -13,7 +13,11 @@ $ sudo ninja install
 
 # Developing
 
-See the mailing list and issue tracker on https://sr.ht/~martijnbraam/Megapixels/
+See the mailing list and issue tracker on https://sr.ht/~martijnbraam/Megapixels/ with:
+
+```
+git config format.subjectPrefix "PATCH Megapixels"
+```
 
 # Config
 
