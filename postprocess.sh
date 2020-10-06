@@ -25,7 +25,7 @@ MAIN_PICTURE="$BURST_DIR"/1.dng
 cp "$BURST_DIR"/1.dng "$TARGET_NAME.dng"
 
 # Use stack_frames to merge the burst if available
-if command -v "stack_frames" &> /dev/null
+if command -v "stack_frames" > /dev/null
 then
 	stack_frames / "$BURST_DIR"/stacked.dng "$BURST_DIR"/*.dng
 	cp "$BURST_DIR"/stacked.dng "$TARGET_NAME.stacked.dng"
@@ -34,13 +34,13 @@ fi
 
 # Create a .jpg if raw processing tools are installed
 DCRAW=""
-if command -v "dcraw_emu" &> /dev/null
+if command -v "dcraw_emu" > /dev/null
 then
 	DCRAW=dcraw_emu
 	# -fbdd 1	Raw denoising with FBDD
 	set -- -fbdd 1
 fi
-if command -v "dcraw" &> /dev/null
+if command -v "dcraw" > /dev/null
 then
 	DCRAW=dcraw
 	set --
@@ -55,13 +55,13 @@ if [ -n "$DCRAW" ]; then
 	$DCRAW +M -H 4 -o 1 -q 3 -T "$@" "$MAIN_PICTURE"
 
 	# If imagemagick is available, convert the tiff to jpeg and apply slight sharpening
-	if command -v convert &> /dev/null
+	if command -v convert > /dev/null
 	then
 		convert "$MAIN_PICTURE".tiff -sharpen 0x1.0 "$TARGET_NAME.jpg"
 
 		# If exiftool is installed copy the exif data over from the tiff to the jpeg
 		# since imagemagick is stupid
-		if command -v exiftool &> /dev/null
+		if command -v exiftool > /dev/null
 		then
 			exiftool -tagsFromfile "$MAIN_PICTURE".tiff \
 				 -software="Megapixels" \
