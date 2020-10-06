@@ -15,6 +15,7 @@
 #include <wordexp.h>
 #include <gtk/gtk.h>
 #include <tiffio.h>
+#include <locale.h>
 #include "config.h"
 #include "ini.h"
 #include "quickdebayer.h"
@@ -1465,6 +1466,8 @@ main(int argc, char *argv[])
 		g_printerr("Could not find any post-process script\n");
 		return ret;
 	}
+
+	setenv("LC_NUMERIC", "C", 1);
 
 	TIFFSetTagExtender(register_custom_tiff_tags);
 
