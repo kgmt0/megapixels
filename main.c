@@ -1520,6 +1520,10 @@ main(int argc, char *argv[])
 	gtk_style_context_add_provider(context,
 		GTK_STYLE_PROVIDER(provider),
 		GTK_STYLE_PROVIDER_PRIORITY_USER);
+	context = gtk_widget_get_style_context(control_box);
+	gtk_style_context_add_provider(context,
+		GTK_STYLE_PROVIDER(provider),
+		GTK_STYLE_PROVIDER_PRIORITY_USER);
 
 	int result = ini_parse(conffile, config_ini_handler, NULL);
 	if (result == -1) {
