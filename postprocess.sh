@@ -40,8 +40,11 @@ then
 	DCRAW=dcraw_emu
 	# -fbdd 1	Raw denoising with FBDD
 	set -- -fbdd 1
-fi
-if command -v "dcraw" > /dev/null
+elif [ -x "/usr/lib/libraw/dcraw_emu" ]; then
+	DCRAW=/usr/lib/libraw/dcraw_emu
+	# -fbdd 1	Raw denoising with FBDD
+	set -- -fbdd 1
+elif command -v "dcraw" > /dev/null
 then
 	DCRAW=dcraw
 	TIFF_EXT="tiff"
