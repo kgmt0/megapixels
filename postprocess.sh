@@ -29,7 +29,7 @@ if command -v "stack_frames" > /dev/null
 then
 	stack_frames / "$BURST_DIR"/stacked.dng "$BURST_DIR"/*.dng
 	cp "$BURST_DIR"/stacked.dng "$TARGET_NAME.stacked.dng"
-	MAIN_PICTURE="$BURST_DIR"/stacked.dng
+	MAIN_PICTURE="$BURST_DIR"/stacked
 fi
 
 # Create a .jpg if raw processing tools are installed
