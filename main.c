@@ -92,7 +92,7 @@ static cairo_surface_t *surface = NULL;
 static cairo_surface_t *status_surface = NULL;
 static int preview_width = -1;
 static int preview_height = -1;
-static char *last_path = NULL;
+static char last_path[260] = "";
 static int auto_exposure = 1;
 static int exposure = 1;
 static int auto_gain = 1;
@@ -774,7 +774,7 @@ process_image(const int *p, int size)
 			}
 			thumb = gdk_pixbuf_scale_simple(pixbufrot, 24, 24, GDK_INTERP_BILINEAR);
 			gtk_image_set_from_pixbuf(GTK_IMAGE(thumb_last), thumb);
-			last_path = strdup(fname);
+			sprintf(last_path, "%s.jpg", fname_target);
 			if (error != NULL) {
 				g_printerr("%s\n", error->message);
 				g_clear_error(&error);
@@ -1167,7 +1167,7 @@ on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 	char uri[270];
 	GError *error = NULL;
 
-	if(!last_path) {
+	if(strlen(last_path) == 0) {
 		return;
 	}
 	sprintf(uri, "file://%s", last_path);
