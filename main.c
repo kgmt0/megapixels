@@ -1398,7 +1398,7 @@ find_config(char *conffile)
 	}
 
 	// If all else fails, fall back to /etc/megapixels.ini
-	conffile = "/etc/megapixels.ini";
+	sprintf(conffile, "/etc/megapixels.ini");
 	if(access(conffile, F_OK) != -1) {
 		printf("Found config file at %s\n", conffile);
 		return 0;
