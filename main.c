@@ -109,7 +109,7 @@ GtkWidget *main_stack;
 GtkWidget *thumb_last;
 GtkWidget *control_box;
 GtkWidget *control_name;
-GtkWidget *control_slider;
+GtkAdjustment *control_slider;
 GtkWidget *control_auto;
 
 static int
@@ -344,6 +344,9 @@ draw_controls()
 		cairo_surface_destroy(status_surface);
 
 	// Make a service to show status of controls, 32px high
+	if (gtk_widget_get_window(preview) == NULL) {
+		return;
+	}
 	status_surface = gdk_window_create_similar_surface(gtk_widget_get_window(preview),
 		CAIRO_CONTENT_COLOR_ALPHA,
 		preview_width, 32);
@@ -404,7 +407,7 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 	struct v4l2_subdev_format fmt = {};
 	fd = open(fn, O_RDWR);
 
-	g_printerr("Setting sensor rate to %d\n", rate);
+	g_print("Setting sensor rate to %d\n", rate);
 	interval.pad = 0;
 	interval.interval.numerator = 1;
 	interval.interval.denominator = rate;
@@ -413,10 +416,11 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 		errno_exit("VIDIOC_SUBDEV_S_FRAME_INTERVAL");
 	}
 
-	g_printerr("Driver returned %d/%d frameinterval\n",
-		interval.interval.numerator, interval.interval.denominator);
+	if (interval.interval.numerator != 1 || interval.interval.denominator != rate)
+		g_printerr("Driver chose %d/%d instead\n",
+			interval.interval.numerator, interval.interval.denominator);
 
-	g_printerr("Setting sensor to %dx%d fmt %d\n",
+	g_print("Setting sensor to %dx%d fmt %d\n",
 		width, height, mbus);
 	fmt.pad = 0;
 	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
@@ -428,10 +432,10 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 	if (xioctl(fd, VIDIOC_SUBDEV_S_FMT, &fmt) == -1) {
 		errno_exit("VIDIOC_SUBDEV_S_FMT");
 	}
-
-	g_printerr("Driver returned %dx%d fmt %d\n",
-		fmt.format.width, fmt.format.height,
-		fmt.format.code);
+	if (fmt.format.width != width || fmt.format.height != height || fmt.format.code != mbus)
+		g_printerr("Driver chose %dx%d fmt %d instead\n",
+			fmt.format.width, fmt.format.height,
+			fmt.format.code);
 
 	// Trigger continuous auto focus if the sensor supports it
 	if (v4l2_has_control(fd, V4L2_CID_FOCUS_AUTO)) {
@@ -515,7 +519,7 @@ init_device(int fd)
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	};
 	if (current.width > 0) {
-		g_printerr("Setting camera to %dx%d fmt %d\n",
+		g_print("Setting camera to %dx%d fmt %d\n",
 			current.width, current.height, current.fmt);
 		fmt.fmt.pix.width = current.width;
 		fmt.fmt.pix.height = current.height;
@@ -527,20 +531,20 @@ init_device(int fd)
 			show_error("Could not set camera mode");
 			return -1;
 		}
-		
-		g_printerr("Driver returned %dx%d fmt %d\n",
-			fmt.fmt.pix.width, fmt.fmt.pix.height,
-			fmt.fmt.pix.pixelformat);
+		if (fmt.fmt.pix.width != current.width ||
+			fmt.fmt.pix.height != current.height ||
+			fmt.fmt.pix.pixelformat != current.fmt)
+			g_printerr("Driver returned %dx%d fmt %d\n",
+				fmt.fmt.pix.width, fmt.fmt.pix.height,
+				fmt.fmt.pix.pixelformat);
 
 
 		/* Note VIDIOC_S_FMT may change width and height. */
 	} else {
-		g_printerr("Querying camera format\n");
-		/* Preserve original settings as set by v4l2-ctl for example */
 		if (xioctl(fd, VIDIOC_G_FMT, &fmt) == -1) {
 			errno_exit("VIDIOC_G_FMT");
 		}
-		g_printerr("Driver returned %dx%d fmt %d\n",
+		g_print("Got %dx%d fmt %d from the driver\n",
 			fmt.fmt.pix.width, fmt.fmt.pix.height,
 			fmt.fmt.pix.pixelformat);
 		current.width = fmt.fmt.pix.width;
@@ -784,7 +788,7 @@ process_image(const int *p, int size)
 			g_object_unref(pixbuf);
 
 			// Start post-processing the captured burst
-			g_printerr("Post process %s to %s.ext\n", burst_dir, fname_target);
+			g_print("Post process %s to %s.ext\n", burst_dir, fname_target);
 			sprintf(command, "%s %s %s &", processing_script, burst_dir, fname_target);
 			system(command);
 
@@ -1109,7 +1113,6 @@ find_cameras()
 		if (ret < 0) {
 			break;
 		}
-		printf("At node %s, (0x%x)\n", entity.name, entity.type);
 		if (strncmp(entity.name, front_cam.dev_name, strlen(front_cam.dev_name)) == 0) {
 			front_cam.entity_id = entity.id;
 			find_dev_node(entity.dev.major, entity.dev.minor, front_cam.dev);
@@ -1147,17 +1150,17 @@ find_media_fd()
 	while ((dir = readdir(d)) != NULL) {
 		if (strncmp(dir->d_name, "media", 5) == 0) {
 			sprintf(fnbuf, "/dev/%s", dir->d_name);
-			printf("Checking %s\n", fnbuf);
 			fd = open(fnbuf, O_RDWR);
 			xioctl(fd, MEDIA_IOC_DEVICE_INFO, &mdi);
-			printf("Found media device: %s\n", mdi.driver);
 			if (strcmp(mdi.driver, media_drv_name) == 0) {
+				printf("Found media device: %s (%s)\n", fnbuf, mdi.driver);
 				media_fd = fd;
 				return 0;
 			}
 			close(fd);
 		}
 	}
+	g_printerr("Could not find /dev/media* node matching '%s'\n", media_drv_name);
 	return 1;
 }
 
@@ -1228,18 +1231,18 @@ on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 			current_control = USER_CONTROL_ISO;
 			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), auto_gain);
-			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 0.0);
-			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), (float)current.gain_max);
-			gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)gain);
+			gtk_adjustment_set_lower(control_slider, 0.0);
+			gtk_adjustment_set_upper(control_slider, (float)current.gain_max);
+			gtk_adjustment_set_value(control_slider, (double)gain);
 
 		} else if (event->x > 60 && event->x < 120) {
 			// Shutter angle
 			current_control = USER_CONTROL_SHUTTER;
 			gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), auto_exposure);
-			gtk_adjustment_set_lower(GTK_ADJUSTMENT(control_slider), 1.0);
-			gtk_adjustment_set_upper(GTK_ADJUSTMENT(control_slider), 360.0);
-			gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)exposure);
+			gtk_adjustment_set_lower(control_slider, 1.0);
+			gtk_adjustment_set_upper(control_slider, 360.0);
+			gtk_adjustment_set_value(control_slider, (double)exposure);
 		}
 
 		return;
@@ -1304,7 +1307,7 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 			} else {
 				v4l2_ctrl_set(fd, V4L2_CID_AUTOGAIN, 0);
 				gain = v4l2_ctrl_get(fd, V4L2_CID_GAIN);
-				gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)gain);
+				gtk_adjustment_set_value(control_slider, (double)gain);
 			}
 			break;
 		case USER_CONTROL_SHUTTER:
@@ -1314,7 +1317,7 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 			} else {
 				v4l2_ctrl_set(fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
 				exposure = v4l2_ctrl_get(fd, V4L2_CID_EXPOSURE);
-				gtk_adjustment_set_value(GTK_ADJUSTMENT(control_slider), (double)exposure);
+				gtk_adjustment_set_value(control_slider, (double)exposure);
 			}
 			break;
 	}
@@ -1476,7 +1479,6 @@ main(int argc, char *argv[])
 	GtkBuilder *builder = gtk_builder_new_from_resource("/org/postmarketos/Megapixels/camera.glade");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-	GtkWidget *preview_box = GTK_WIDGET(gtk_builder_get_object(builder, "preview_box"));
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
 	GtkWidget *switch_btn = GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
 	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
@@ -1491,7 +1493,7 @@ main(int argc, char *argv[])
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	control_box = GTK_WIDGET(gtk_builder_get_object(builder, "control_box"));
 	control_name = GTK_WIDGET(gtk_builder_get_object(builder, "control_name"));
-	control_slider = GTK_WIDGET(gtk_builder_get_object(builder, "control_adj"));
+	control_slider = GTK_ADJUSTMENT(gtk_builder_get_object(builder, "control_adj"));
 	control_auto = GTK_WIDGET(gtk_builder_get_object(builder, "control_auto"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
@@ -1515,11 +1517,7 @@ main(int argc, char *argv[])
 	} else {
 		gtk_css_provider_load_from_resource(provider, "/org/postmarketos/Megapixels/camera.css");
 	}
-	GtkStyleContext *context = gtk_widget_get_style_context(preview_box);
-	gtk_style_context_add_provider(context,
-		GTK_STYLE_PROVIDER(provider),
-		GTK_STYLE_PROVIDER_PRIORITY_USER);
-	context = gtk_widget_get_style_context(error_box);
+	GtkStyleContext *context = gtk_widget_get_style_context(error_box);
 	gtk_style_context_add_provider(context,
 		GTK_STYLE_PROVIDER(provider),
 		GTK_STYLE_PROVIDER_PRIORITY_USER);
