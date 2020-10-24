@@ -2,6 +2,7 @@ project('megapixels', 'c')
 gnome = import('gnome')
 gtkdep = dependency('gtk+-3.0')
 tiff = dependency('libtiff-4')
+threads = dependency('threads')
 
 cc = meson.get_compiler('c')
 libm = cc.find_library('m', required: false)
@@ -15,7 +16,7 @@ configure_file(
   output: 'config.h',
   configuration: conf )
 
-executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', resources, dependencies : [gtkdep, libm, tiff], install : true)
+executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', 'camera.c', 'device.c', 'pipeline.c', resources, dependencies : [gtkdep, libm, tiff, threads], install : true)
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
@@ -38,3 +39,6 @@ install_data([
 install_data(['postprocess.sh'],
   install_dir : get_option('datadir') / 'megapixels/',
   install_mode: 'rwxr-xr-x')
+
+executable('list_devices', 'tools/list_devices.c', 'device.c', dependencies: [gtkdep])
+executable('test_camera', 'tools/test_camera.c', 'camera.c', 'device.c', dependencies: [gtkdep])
