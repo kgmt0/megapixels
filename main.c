@@ -610,7 +610,9 @@ process_image(const int *p, int size)
 		}
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current.width / (skip*2), current.height / (skip*2));
 		pixels = gdk_pixbuf_get_pixels(pixbuf);
-		quick_debayer_bggr8((const uint8_t *)p, pixels, current.width, current.height, skip, current.blacklevel);
+		quick_debayer((const uint8_t *)p, pixels, current.fmt,
+			       current.width, current.height, skip,
+			       current.blacklevel);
 
 		if (current.rotate == 0) {
 			pixbufrot = pixbuf;
@@ -765,7 +767,9 @@ process_image(const int *p, int size)
 			// Update the thumbnail if this is the last frame
 			pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current.width / (skip*2), current.height / (skip*2));
 			pixels = gdk_pixbuf_get_pixels(pixbuf);
-			quick_debayer_bggr8((const uint8_t *)p, pixels, current.width, current.height, skip, current.blacklevel);
+			quick_debayer((const uint8_t *)p, pixels, current.fmt,
+				      current.width, current.height, skip,
+				      current.blacklevel);
 
 			if (current.rotate == 0) {
 				pixbufrot = pixbuf;
