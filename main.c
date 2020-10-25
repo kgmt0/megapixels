@@ -937,13 +937,16 @@ config_ini_handler(void *user, const char *section, const char *name,
 		} else if (strcmp(name, "fmt") == 0) {
 			if (strcmp(value, "RGGB8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SRGGB8;
+				cc->mbus = MEDIA_BUS_FMT_SRGGB8_1X8;
 			} else if (strcmp(value, "BGGR8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SBGGR8;
 				cc->mbus = MEDIA_BUS_FMT_SBGGR8_1X8;
 			} else if (strcmp(value, "GRBG8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SGRBG8;
+				cc->mbus = MEDIA_BUS_FMT_SGRBG8_1X8;
 			} else if (strcmp(value, "GBRG8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SGBRG8;
+				cc->mbus = MEDIA_BUS_FMT_SGBRG8_1X8;
 			} else {
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);
