@@ -17,10 +17,13 @@ configure_file(
 
 executable('megapixels', 'main.c', 'ini.c', 'quickdebayer.c', resources, dependencies : [gtkdep, libm, tiff], install : true)
 
-install_data(['org.postmarketos.Megapixels.desktop'],
+install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
 
-install_data('org.postmarketos.Megapixels.svg',
+install_data(['data/org.postmarketos.Megapixels.metainfo.xml'],
+             install_dir : get_option('datadir') / 'metainfo')
+
+install_data('data/org.postmarketos.Megapixels.svg',
   install_dir: join_paths(get_option('datadir'), 'icons/hicolor/scalable/apps')
 )
 

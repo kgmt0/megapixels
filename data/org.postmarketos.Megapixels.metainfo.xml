@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+	<id>org.postmarketos.Megapixels</id>
+	<metadata_license>CC0-1.0</metadata_license>
+	<project_license>GPL-3.0</project_license>
+	<name>Megapixels</name>
+	<summary>A gnome camera application for phones</summary>
+	<description>
+		<p>
+			Megapixels is a camera application designed for phones and tablets. It
+			implements the v4l2 and media-request apis so set up camera pipelines on
+			ARM hardware and uses the raw data modes of the sensors to get the best
+			quality pictures.
+		</p>
+	</description>
+	<launchable type="desktop-id">org.postmarketos.Megapixels.desktop</launchable>
+	<provides>
+		<binary>megapixels</binary>
+	</provides>
+	<screenshots>
+		<screenshot type="default">
+			<image>http://brixitcdn.net/metainfo/megapixels.png</image>
+		</screenshot>
+	</screenshots>
+	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
+	<releases>
+		<release version="0.11.1" date="2020-10-07">
+			<description>
+				<ul>
+					<li>The preview now has the correct gamma curve, making the images brighter so you can see what you're capturing</li>
+					<li>Fixed some posix compliance issues</li>
+				</ul>
+			</description>
+		</release>
+
+		<release version="0.11.0" date="2020-10-06">
+			<description>
+				<p>
+					This is the UI improvement release. Now it's possible to change exposure settings in the app preview
+				</p>
+				<ul>
+					<li>Added UI for camera controls</li>
+					<li>Slight image quality improvements on the generated .jpg files</li>
+					<li>Better support for other releases of dcraw</li>
+					<li>Fixed bug on locales with a comma as decimal seperator</li>
+				</ul>
+			</description>
+		</release>
+
+		<release version="0.10.0" date="2020-10-02">
+			<description>
+				<p>
+					This release rewrites a lot of the image processing pipeline. Megapixels now
+					only directly outputs .dng files and then triggers an external processing
+					pipeline to convert that into the desired image formats
+				</p>
+				<ul>
+					<li>Capture a burst of 5 raw frames when pressing the shutter button</li>
+					<li>Added colorspace metadata to the images</li>
+					<li>Added exif tags to the generated images</li>
+					<li>If the sensor supports autofocus then that is triggered on the start of the application</li>
+					<li>Fixed some memory leaks</li>
+				</ul>
+			</description>
+		</release>
+
+		<release version="0.9.0" date="2020-09-24">
+			<description>
+				<p>This release brings mainly UI improvements</p>
+				<ul>
+					<li>Settings button does slightly more now, but is still useless</li>
+					<li>Made the shutter button more visible</li>
+					<li>Use all svg icons in the bottom bar</li>
+					<li>Added button to open the image storage folder</li>
+					<li>Added button tthat opens the latest image</li>
+					<li>Taking a picture now sets a thumbnail on the latest image button</li>
+				</ul>
+			</description>
+		</release>
+		
+		<release version="0.8.0" date="2020-09-21">
+			<description>
+				<p>First distro-packaged release of Megapixels</p>
+			</description>
+		</release>
+	</releases>
