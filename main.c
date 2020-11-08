@@ -20,6 +20,8 @@
 #include "ini.h"
 #include "quickdebayer.h"
 
+#define NUM_CAMERAS 5
+
 enum user_control {
 	USER_CONTROL_ISO,
 	USER_CONTROL_SHUTTER
@@ -33,9 +35,11 @@ struct buffer {
 };
 
 struct camerainfo {
+	char cfg_name[100];
+	int exists;
 	char dev_name[260];
+	char dev_fname[260];
 	unsigned int entity_id;
-	char dev[260];
 	int width;
 	int height;
 	int rate;
@@ -43,6 +47,13 @@ struct camerainfo {
 	int fmt;
 	int mbus;
 	int fd;
+
+	char media_dev_name[260];
+	char media_dev_fname[260];
+	char video_dev_fname[260];
+	int media_fd;
+	int video_fd;
+	unsigned int interface_entity_id;
 
 	float colormatrix[9];
 	float forwardmatrix[9];
@@ -62,6 +73,8 @@ struct camerainfo {
 	int has_af_s;
 };
 
+struct camerainfo cameras[NUM_CAMERAS];
+
 static float colormatrix_srgb[] = {
 	3.2409, -1.5373, -0.4986,
 	-0.9692, 1.8759, 0.0415,
@@ -71,23 +84,16 @@ static float colormatrix_srgb[] = {
 struct buffer *buffers;
 static unsigned int n_buffers;
 
-struct camerainfo rear_cam;
-struct camerainfo front_cam;
 struct camerainfo current;
 
-// Camera interface
-static char *media_drv_name;
-static unsigned int interface_entity_id;
-static char dev_name[260];
-static int media_fd;
-static int video_fd;
+// General info
 static char *exif_make;
 static char *exif_model;
 
 // State
 static int ready = 0;
 static int capture = 0;
-static int current_is_rear = 1;
+static int current_cid = -1;
 static cairo_surface_t *surface = NULL;
 static cairo_surface_t *status_surface = NULL;
 static int preview_width = -1;
@@ -207,7 +213,7 @@ init_mmap(int fd)
 	if (xioctl(fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s does not support memory mapping",
-				dev_name);
+				current.dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_REQBUFS");
@@ -216,7 +222,7 @@ init_mmap(int fd)
 
 	if (req.count < 2) {
 		fprintf(stderr, "Insufficient buffer memory on %s\n",
-			dev_name);
+			current.dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -471,7 +477,7 @@ init_device(int fd)
 	if (xioctl(fd, VIDIOC_QUERYCAP, &cap) == -1) {
 		if (errno == EINVAL) {
 			fprintf(stderr, "%s is no V4L2 device\n",
-				dev_name);
+				current.dev_name);
 			exit(EXIT_FAILURE);
 		} else {
 			errno_exit("VIDIOC_QUERYCAP");
@@ -480,13 +486,13 @@ init_device(int fd)
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 		fprintf(stderr, "%s is no video capture device\n",
-			dev_name);
+			current.dev_name);
 		exit(EXIT_FAILURE);
 	}
 
 	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
 		fprintf(stderr, "%s does not support streaming i/o\n",
-			dev_name);
+			current.dev_name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -885,13 +891,13 @@ get_frame()
 		int r;
 
 		FD_ZERO(&fds);
-		FD_SET(video_fd, &fds);
+		FD_SET(current.video_fd, &fds);
 
 		/* Timeout. */
 		tv.tv_sec = 2;
 		tv.tv_usec = 0;
 
-		r = select(video_fd + 1, &fds, NULL, NULL, &tv);
+		r = select(current.video_fd + 1, &fds, NULL, NULL, &tv);
 
 		if (r == -1) {
 			if (EINTR == errno) {
@@ -903,7 +909,7 @@ get_frame()
 			exit(EXIT_FAILURE);
 		}
 
-		if (read_frame(video_fd)) {
+		if (read_frame(current.video_fd)) {
 			break;
 		}
 		/* EAGAIN - continue select loop. */
@@ -924,12 +930,46 @@ config_ini_handler(void *user, const char *section, const char *name,
 	const char *value)
 {
 	struct camerainfo *cc;
-	if (strcmp(section, "rear") == 0 || strcmp(section, "front") == 0) {
-		if (strcmp(section, "rear") == 0) {
-			cc = &rear_cam;
+	int cid;
+	int found;
+	int first_free;
+	if (strcmp(section, "device") == 0) {
+		if (strcmp(name, "make") == 0) {
+			exif_make = strdup(value);
+		} else if (strcmp(name, "model") == 0) {
+			exif_model = strdup(value);
 		} else {
-			cc = &front_cam;
+			g_printerr("Unknown key '%s' in [device]\n", name);
+			exit(1);
 		}
+	} else {
+		found = 0;
+		first_free = -1;
+		for (int i=0; i<NUM_CAMERAS; i++) {
+			if(cameras[i].exists == 1 && strcmp(cameras[i].cfg_name, section) == 0) {
+				cid = i;
+				found = 1;
+				break;
+			}
+			if(first_free == -1 && cameras[i].exists != 1) {
+				first_free = i;
+			}
+		}
+
+		if (first_free == -1 && found == 0) {
+			g_printerr("More cameras defined than NUM_CAMERAS\n");
+			exit(1);
+		}
+
+		if (!found) {
+			cid = first_free;
+			strcpy(cameras[cid].cfg_name, section);
+			cameras[cid].exists = 1;
+			printf("Adding camera %s from config\n", section);
+		}
+		
+		cc = &cameras[cid];
+
 		if (strcmp(name, "width") == 0) {
 			cc->width = strtoint(value, NULL, 10);
 		} else if (strcmp(name, "height") == 0) {
@@ -957,6 +997,8 @@ config_ini_handler(void *user, const char *section, const char *name,
 			}
 		} else if (strcmp(name, "driver") == 0) {
 			strcpy(cc->dev_name, value);
+		} else if (strcmp(name, "media-driver") == 0) {
+			strcpy(cc->media_dev_name, value);
 		} else if (strcmp(name, "colormatrix") == 0) {
 			sscanf(value, "%f,%f,%f,%f,%f,%f,%f,%f,%f",
 					cc->colormatrix+0,
@@ -999,20 +1041,6 @@ config_ini_handler(void *user, const char *section, const char *name,
 			g_printerr("Unknown key '%s' in [%s]\n", name, section);
 			exit(1);
 		}
-	} else if (strcmp(section, "device") == 0) {
-		if (strcmp(name, "csi") == 0) {
-			media_drv_name = strdup(value);
-		} else if (strcmp(name, "make") == 0) {
-			exif_make = strdup(value);
-		} else if (strcmp(name, "model") == 0) {
-			exif_model = strdup(value);
-		} else {
-			g_printerr("Unknown key '%s' in [device]\n", name);
-			exit(1);
-		}
-	} else {
-		g_printerr("Unknown section '%s' in config file\n", section);
-		exit(1);
 	}
 	return 1;
 }
@@ -1038,137 +1066,131 @@ find_dev_node(int maj, int min, char *fnbuf)
 }
 
 int
-setup_rear()
+setup_camera(int cid)
 {
 	struct media_link_desc link = {0};
+	
+	// Kill existing links for cameras in the same graph
+	for(int i=0; i<NUM_CAMERAS; i++) {
+		if(!cameras[i].exists)
+			continue;
+		if(i == cid)
+			continue;
+		if(strcmp(cameras[i].media_dev_fname, cameras[cid].media_dev_fname) != 0)
+			continue;
 
-	// Disable the interface<->front link
-	link.flags = 0;
-	link.source.entity = front_cam.entity_id;
-	link.source.index = 0;
-	link.sink.entity = interface_entity_id;
-	link.sink.index = 0;
+		// Disable the interface<->front link
+		link.flags = 0;
+		link.source.entity = cameras[i].entity_id;
+		link.source.index = 0;
+		link.sink.entity = cameras[i].interface_entity_id;
+		link.sink.index = 0;
 
-	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
-		g_printerr("Could not disable front camera link\n");
-		return -1;
+		if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
+			g_printerr("Could not disable [%s] camera link\n", cameras[i].cfg_name);
+			return -1;
+		}
 	}
 
-	// Enable the interface<->rear link
+
+	// Enable the interface<->sensor link
 	link.flags = MEDIA_LNK_FL_ENABLED;
-	link.source.entity = rear_cam.entity_id;
+	link.source.entity = cameras[cid].entity_id;
 	link.source.index = 0;
-	link.sink.entity = interface_entity_id;
+	link.sink.entity = cameras[cid].interface_entity_id;
 	link.sink.index = 0;
 
-	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
-		g_printerr("Could not enable rear camera link\n");
+	if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
+		g_printerr("[%s] Could not enable camera link\n", cameras[cid].cfg_name);
 		return -1;
 	}
 
-	current = rear_cam;
+	current = cameras[cid];
 
 	// Find camera node
-	init_sensor(current.dev, current.width, current.height, current.mbus, current.rate);
+	init_sensor(current.dev_fname, current.width, current.height, current.mbus, current.rate);
 	return 0;
 }
 
 int
-setup_front()
-{
-	struct media_link_desc link = {0};
-
-	// Disable the interface<->rear link
-	link.flags = 0;
-	link.source.entity = rear_cam.entity_id;
-	link.source.index = 0;
-	link.sink.entity = interface_entity_id;
-	link.sink.index = 0;
-
-	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
-		g_printerr("Could not disable rear camera link\n");
-		return -1;
-	}
-
-	// Enable the interface<->rear link
-	link.flags = MEDIA_LNK_FL_ENABLED;
-	link.source.entity = front_cam.entity_id;
-	link.source.index = 0;
-	link.sink.entity = interface_entity_id;
-	link.sink.index = 0;
-
-	if (xioctl(media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
-		g_printerr("Could not enable front camera link\n");
-		return -1;
-	}
-	current = front_cam;
-	// Find camera node
-	init_sensor(current.dev, current.width, current.height, current.mbus, current.rate);
-	return 0;
-}
-
-int
-find_cameras()
+find_camera(int cid)
 {
 	struct media_entity_desc entity = {0};
-	int ret;
-	int found = 0;
-
-	while (1) {
-		entity.id = entity.id | MEDIA_ENT_ID_FLAG_NEXT;
-		ret = xioctl(media_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
-		if (ret < 0) {
-			break;
-		}
-		if (strncmp(entity.name, front_cam.dev_name, strlen(front_cam.dev_name)) == 0) {
-			front_cam.entity_id = entity.id;
-			find_dev_node(entity.dev.major, entity.dev.minor, front_cam.dev);
-			printf("Found front cam, is %s at %s\n", entity.name, front_cam.dev);
-			found++;
-		}
-		if (strncmp(entity.name, rear_cam.dev_name, strlen(rear_cam.dev_name)) == 0) {
-			rear_cam.entity_id = entity.id;
-			find_dev_node(entity.dev.major, entity.dev.minor, rear_cam.dev);
-			printf("Found rear cam, is %s at %s\n", entity.name, rear_cam.dev);
-			found++;
-		}
-		if (entity.type == MEDIA_ENT_F_IO_V4L) {
-			interface_entity_id = entity.id;
-			find_dev_node(entity.dev.major, entity.dev.minor, dev_name);
-			printf("Found v4l2 interface node at %s\n", dev_name);
-		}
-	}
-	if (found < 2) {
-		return -1;
-	}
-	return 0;
-}
-
-
-int
-find_media_fd()
-{
 	DIR *d;
 	struct dirent *dir;
 	int fd;
 	char fnbuf[261];
 	struct media_device_info mdi = {0};
+	int ret;
+	int found_subdev = 0;
+	int found_interface = 0;
+
+	// find the /dev/media node for the camera media-driver
 	d = opendir("/dev");
 	while ((dir = readdir(d)) != NULL) {
 		if (strncmp(dir->d_name, "media", 5) == 0) {
 			sprintf(fnbuf, "/dev/%s", dir->d_name);
 			fd = open(fnbuf, O_RDWR);
 			xioctl(fd, MEDIA_IOC_DEVICE_INFO, &mdi);
-			if (strcmp(mdi.driver, media_drv_name) == 0) {
-				printf("Found media device: %s (%s)\n", fnbuf, mdi.driver);
-				media_fd = fd;
-				return 0;
+			if (strcmp(mdi.driver, cameras[cid].media_dev_name) == 0) {
+				printf("[%s] media device: %s (%s)\n", cameras[cid].cfg_name, fnbuf, mdi.driver);
+				cameras[cid].media_fd = fd;
+				goto find_camera_found_media;
 			}
 			close(fd);
 		}
 	}
-	g_printerr("Could not find /dev/media* node matching '%s'\n", media_drv_name);
+	g_printerr("Could not find /dev/media* node matching '%s'\n", cameras[cid].media_dev_name);
+	return 0;
+
+find_camera_found_media:
+	// inspect the media node and find the sensor
+	while (1) {
+		entity.id = entity.id | MEDIA_ENT_ID_FLAG_NEXT;
+		ret = xioctl(fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
+		if (ret < 0) {
+			break;
+		}
+		if (!found_subdev && strncmp(entity.name, cameras[cid].dev_name, strlen(cameras[cid].dev_name)) == 0) {
+			cameras[cid].entity_id = entity.id;
+			find_dev_node(entity.dev.major, entity.dev.minor, cameras[cid].dev_fname);
+			printf("[%s] subdev: %s (%s)\n", cameras[cid].cfg_name, cameras[cid].dev_fname, entity.name);
+			found_subdev = 1;
+		}
+		if (!found_interface && entity.type == MEDIA_ENT_F_IO_V4L) {
+			cameras[cid].interface_entity_id = entity.id;
+			find_dev_node(entity.dev.major, entity.dev.minor, cameras[cid].video_dev_fname);
+			printf("[%s] video: %s (%s)\n", cameras[cid].cfg_name, cameras[cid].video_dev_fname, entity.name);
+			found_interface = 1;
+		}
+	}
+
+	if (!found_subdev) {
+		g_printerr("[%s] Could not find subdev '%s'\n", cameras[cid].cfg_name, cameras[cid].dev_name);
+		return 0;
+	}
+	if (!found_interface) {
+		g_printerr("[%s] Could not find interface node\n", cameras[cid].cfg_name);
+		return 0;
+	}
+	
 	return 1;
+}
+
+int
+find_cameras()
+{
+	int found_one = 0;
+	for(int i=0; i<NUM_CAMERAS; i++) {
+		if(!cameras[i].exists)
+			continue;
+		if(find_camera(i)) {
+			found_one = 1;
+		} else {
+			cameras[i].exists = 0;
+		}
+	}
+	return found_one;
 }
 
 void
@@ -1271,23 +1293,49 @@ on_error_close_clicked(GtkWidget *widget, gpointer user_data)
 void
 on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 {
-	stop_capturing(video_fd);
-	close(current.fd);
-	if (current_is_rear == 1) {
-		setup_front();
-		current_is_rear = 0;
-	} else {
-		setup_rear();
-		current_is_rear = 1;
+	int found_next = 0;
+	int old_cid = current_cid;
+	int next_cid = -1;
+	for(int i=current_cid; i<NUM_CAMERAS; i++) {
+		if(i == current_cid)
+			continue;
+		if(!cameras[i].exists)
+			continue;
+
+		found_next = 1;
+		next_cid = i;
 	}
-	close(video_fd);
-	video_fd = open(dev_name, O_RDWR);
-	if (video_fd == -1) {
-		g_printerr("Error opening video device: %s\n", dev_name);
+	if(!found_next) {
+		for(int i=0; i<current_cid; i++) {
+			if(i == current_cid)
+				continue;
+			if(!cameras[i].exists)
+				continue;
+
+			found_next = 1;
+			next_cid = i;
+		}	
+	}
+	if(!found_next) {
+		g_printerr("Could not find a candidate camera to switch to\n");
 		return;
 	}
-	init_device(video_fd);
-	start_capturing(video_fd);
+
+	printf("Switching from [%s] to [%s]\n", cameras[current_cid].cfg_name, cameras[next_cid].cfg_name);
+
+	stop_capturing(cameras[current_cid].video_fd);
+	close(cameras[current_cid].fd);
+	setup_camera(next_cid);
+	close(cameras[old_cid].video_fd);
+	cameras[next_cid].video_fd = open(cameras[next_cid].video_dev_fname, O_RDWR);
+	if (cameras[next_cid].video_fd == -1) {
+		g_printerr("Error opening video device: %s\n", cameras[next_cid].video_dev_fname);
+		return;
+	}
+
+	current_cid = next_cid;
+	init_device(cameras[current_cid].video_fd);
+	start_capturing(cameras[current_cid].video_fd);
 }
 
 void
@@ -1544,31 +1592,33 @@ main(int argc, char *argv[])
 		g_printerr("Could not parse config file\n");
 		return 1;
 	}
-	if (find_media_fd() == -1) {
-		g_printerr("Could not find the media node\n");
-		show_error("Could not find the media node");
-		goto failed;
-	}
-	if (find_cameras() == -1) {
+	if (find_cameras() == 0) {
 		g_printerr("Could not find the cameras\n");
 		show_error("Could not find the cameras");
 		goto failed;
 	}
-	setup_rear();
 
-	int fd = open(dev_name, O_RDWR);
-	if (fd == -1) {
-		g_printerr("Error opening video device: %s\n", dev_name);
-		show_error("Error opening the video device");
-		goto failed;
+	// Setup first defined camera
+	for(int i=0;i<NUM_CAMERAS; i++) {
+		if(cameras[i].exists){
+			setup_camera(i);
+			current_cid = i;
+
+			cameras[i].video_fd = open(cameras[i].video_dev_fname, O_RDWR);
+			if (cameras[i].video_fd == -1) {
+				g_printerr("Error opening video device: %s\n", cameras[i].video_dev_fname);
+				show_error("Error opening the video device");
+				goto failed;
+			}
+			if(init_device(cameras[i].video_fd) < 0){
+				goto failed;
+			}
+			start_capturing(cameras[i].video_fd);
+
+			break;
+		}
 	}
 
-	video_fd = fd;
-
-	if(init_device(fd) < 0){
-		goto failed;
-	}
-	start_capturing(fd);
 
 failed:
 	printf("window show\n");
