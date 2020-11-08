@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2020 Martijn Braam -->
 <component type="desktop-application">
 	<id>org.postmarketos.Megapixels</id>
 	<metadata_license>CC0-1.0</metadata_license>
@@ -23,6 +24,7 @@
 		</screenshot>
 	</screenshots>
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
+	<content_rating type="oars-1.1" />
 	<releases>
 		<release version="0.11.1" date="2020-10-07">
 			<description>
@@ -84,3 +86,4 @@
 			</description>
 		</release>
 	</releases>
+</component>
