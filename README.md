@@ -32,14 +32,15 @@ Configuration files are INI format files.
 
 ### [device]
 
-This provides global info, currently only the `csi` key exists, telling megapixels which device in the 
-media-ctl tree is the interface to the kernel. This should provide the /dev/video* node.
+This provides global info, currently only the `make` and `model` keys exist, which is metadata added to the
+generated pictures.
 
-### [rear] and [front]
+### All other sections
 
 These are the sections describing the sensors.
 
 * `driver=ov5640` the name of the media node that provides the sensor and it's /dev/v4l-subdev* node.
+* `media-driver=sun6i-csi` the name of the media node that has this camera in it.
 * `width=640` and `height=480` the resolution to use for the sensor
 * `rate=15` the refresh rate in fps to use for the sensor
 * `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor, only BGGR8 is fully supported
