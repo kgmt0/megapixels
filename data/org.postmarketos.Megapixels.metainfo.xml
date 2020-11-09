@@ -26,6 +26,19 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="0.12.0" date="2020-11-09">
+			<description>
+				<p>
+					This release has a rewrite in the config file parsing and camera handeling.
+				</p>
+				<ul>
+					<li>Support 1-5 cameras now instead of the hardcoded 2</li>
+					<li>Support cameras being in their own video and media node</li>
+					<li>Debayering now supports 4 pixel orders instead of the hardcoded BGGR</li>
+					<li>Added Appstream metainfo for graphical package management software</li>
+				</ul>
+			</description>
+		</release>
 		<release version="0.11.1" date="2020-10-07">
 			<description>
 				<ul>
