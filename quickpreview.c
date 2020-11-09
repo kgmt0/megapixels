@@ -84,7 +84,7 @@ void quick_debayer(const uint8_t *source, uint8_t *destination,
 }
 
 
-// YUV format to RGB, currently only extracts the Y channel for a grayscale preview
+// YUV 4:2:2 to RGB conversion
 void quick_yuv2rgb(const uint8_t *source, uint8_t *destination,
 		uint32_t pix_fmt, int width, int height, int skip)
 {
@@ -109,13 +109,13 @@ void quick_yuv2rgb(const uint8_t *source, uint8_t *destination,
 				V = source[i+3];
 				break;
 		}
-		destination[j] = Y1;
-		destination[j+1] = Y1;
-		destination[j+2] = Y1;
+		destination[j] = 1.164f * Y1 + 1.596f * (V - 128);
+		destination[j+1] = 1.164f * Y1 - 0.813f * (V - 128) - 0.391f * (U - 128);
+		destination[j+2] = 1.164f * Y1 + 2.018f * (U - 128);
 		j += 3;
-		destination[j] = Y2;
-		destination[j+1] = Y2;
-		destination[j+2] = Y2;
+		destination[j] = 1.164f * Y2 + 1.596f * (V - 128);
+		destination[j+1] = 1.164f * Y2 - 0.813f * (V - 128) - 0.391f * (U - 128);
+		destination[j+2] = 1.164f * Y2 + 2.018f * (U - 128);
 		j += 3;
 
 		i += pixelsize * skip * 2;
