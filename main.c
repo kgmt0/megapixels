@@ -1598,6 +1598,16 @@ main(int argc, char *argv[])
 		goto failed;
 	}
 
+	// Disable the camera switch button if only one camera exists
+	int camera_count = 0;
+	for (int i=0; i<NUM_CAMERAS; i++) {
+		if(cameras[i].exists)
+			camera_count++;
+	}
+	if (camera_count < 2) {
+		gtk_widget_set_sensitive(switch_btn, FALSE);
+	}
+
 	// Setup first defined camera
 	for(int i=0;i<NUM_CAMERAS; i++) {
 		if(cameras[i].exists){
