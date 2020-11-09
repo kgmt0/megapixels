@@ -18,7 +18,7 @@
 #include <locale.h>
 #include "config.h"
 #include "ini.h"
-#include "quickdebayer.h"
+#include "quickpreview.h"
 
 #define NUM_CAMERAS 5
 
@@ -609,16 +609,48 @@ process_image(const int *p, int size)
 	static const float neutral[] = {1.0, 1.0, 1.0};
 	static uint16_t isospeed[] = {0};
 
+	/*
+	int sizing = -1;
+
+	switch(current.fmt) {
+		case V4L2_PIX_FMT_SBGGR8:
+		case V4L2_PIX_FMT_SGBRG8:
+		case V4L2_PIX_FMT_SGRBG8:
+		case V4L2_PIX_FMT_SRGGB8:
+			sizing = 1;
+			break;
+		case V4L2_PIX_FMT_UYVY:
+			sizing = 2;
+			break;
+	}
+	*/
+
 	// Only process preview frames when not capturing
 	if (capture == 0) {
-		if(current.width > 1280) {
+		if(current.width > 1920) {
 			skip = 3;
+		}
+		if(current.width > 1281) {
+			skip = 2;
 		}
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current.width / (skip*2), current.height / (skip*2));
 		pixels = gdk_pixbuf_get_pixels(pixbuf);
-		quick_debayer((const uint8_t *)p, pixels, current.fmt,
-			       current.width, current.height, skip,
-			       current.blacklevel);
+
+		switch(current.fmt) {
+			case V4L2_PIX_FMT_SBGGR8:
+			case V4L2_PIX_FMT_SGBRG8:
+			case V4L2_PIX_FMT_SGRBG8:
+			case V4L2_PIX_FMT_SRGGB8:
+				quick_debayer((const uint8_t *)p, pixels, current.fmt,
+						current.width, current.height, skip,
+						current.blacklevel);
+				break;
+			case V4L2_PIX_FMT_UYVY:
+			case V4L2_PIX_FMT_YUYV:
+				quick_yuv2rgb((const uint8_t *)p, pixels, current.fmt,
+						current.width, current.height, skip);
+				break;
+		}
 
 		if (current.rotate == 0) {
 			pixbufrot = pixbuf;
@@ -905,8 +937,8 @@ get_frame()
 			}
 			errno_exit("select");
 		} else if (r == 0) {
-			fprintf(stderr, "select timeout\\n");
-			exit(EXIT_FAILURE);
+			g_printerr("get_frame: select timeout\n");
+			return TRUE;
 		}
 
 		if (read_frame(current.video_fd)) {
@@ -991,6 +1023,9 @@ config_ini_handler(void *user, const char *section, const char *name,
 			} else if (strcmp(value, "GBRG8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SGBRG8;
 				cc->mbus = MEDIA_BUS_FMT_SGBRG8_1X8;
+			} else if (strcmp(value, "UYVY") == 0) {
+				cc->fmt = V4L2_PIX_FMT_UYVY;
+				cc->mbus = MEDIA_BUS_FMT_UYVY8_2X8;
 			} else {
 				g_printerr("Unsupported pixelformat %s\n", value);
 				exit(1);

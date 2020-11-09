@@ -4,7 +4,7 @@
  */
 
 #include <linux/videodev2.h>
-#include "quickdebayer.h"
+#include "quickpreview.h"
 
 /* Linear -> sRGB lookup table */
 static const int srgb[] = {
@@ -79,6 +79,51 @@ void quick_debayer(const uint8_t *source, uint8_t *destination,
 			row_left = width;
 			i = i + width;
 			i = i + (width * 2 * (skip-1));
+		}
+	} while (i < input_size);
+}
+
+
+// YUV format to RGB, currently only extracts the Y channel for a grayscale preview
+void quick_yuv2rgb(const uint8_t *source, uint8_t *destination,
+		uint32_t pix_fmt, int width, int height, int skip)
+{
+	int stride = width * 2;
+	int pixelsize = 4;
+	int input_size = width * 2 * height;
+	int i = 0, j = 0;
+	int row_left = stride;
+	uint8_t Y1, Y2, U, V;
+	do {
+		switch (pix_fmt) {
+			case V4L2_PIX_FMT_UYVY:
+				Y1 = source[i+1];
+				Y2 = source[i+3];
+				U = source[i];
+				V = source[i+2];
+				break;
+			case V4L2_PIX_FMT_YUYV:
+				Y1 = source[i];
+				Y2 = source[i+2];
+				U = source[i+1];
+				V = source[i+3];
+				break;
+		}
+		destination[j] = Y1;
+		destination[j+1] = Y1;
+		destination[j+2] = Y1;
+		j += 3;
+		destination[j] = Y2;
+		destination[j+1] = Y2;
+		destination[j+2] = Y2;
+		j += 3;
+
+		i += pixelsize * skip * 2;
+		row_left -= (pixelsize * skip * 2);
+		if(row_left < (pixelsize * skip * 2)){
+			i = i + row_left;
+			row_left = width;
+			i = i + (stride * skip);
 		}
 	} while (i < input_size);
 }

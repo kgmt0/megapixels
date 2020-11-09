@@ -15,7 +15,7 @@ configure_file(
   output: 'config.h',
   configuration: conf )
 
-executable('megapixels', 'main.c', 'ini.c', 'quickdebayer.c', resources, dependencies : [gtkdep, libm, tiff], install : true)
+executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', resources, dependencies : [gtkdep, libm, tiff], install : true)
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
