@@ -57,6 +57,7 @@ struct camerainfo {
 	int rotate;
 	int fmt;
 	int mbus;
+	enum v4l2_buf_type type;
 	int fd;
 
 	char media_dev_name[260];
@@ -95,6 +96,7 @@ static float colormatrix_srgb[] = {
 };
 
 struct buffer *buffers;
+struct v4l2_plane buf_planes[1];
 static unsigned int n_buffers;
 
 struct camerainfo current;
@@ -175,22 +177,24 @@ remap(int value, int input_min, int input_max, int output_min, int output_max)
 static void
 start_capturing(int fd)
 {
-	enum v4l2_buf_type type;
-
 	for (int i = 0; i < n_buffers; ++i) {
 		struct v4l2_buffer buf = {
-			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.type = current.type,
 			.memory = V4L2_MEMORY_MMAP,
 			.index = i,
 		};
+
+		if(current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+			buf.m.planes = buf_planes;
+			buf.length = 1;
+		}
 
 		if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
 			errno_exit("VIDIOC_QBUF");
 		}
 	}
 
-	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (xioctl(fd, VIDIOC_STREAMON, &type) == -1) {
+	if (xioctl(fd, VIDIOC_STREAMON, &current.type) == -1) {
 		errno_exit("VIDIOC_STREAMON");
 	}
 
@@ -204,8 +208,7 @@ stop_capturing(int fd)
 	ready = 0;
 	printf("Stopping capture\n");
 
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (xioctl(fd, VIDIOC_STREAMOFF, &type) == -1) {
+	if (xioctl(fd, VIDIOC_STREAMOFF, &current.type) == -1) {
 		errno_exit("VIDIOC_STREAMOFF");
 	}
 
@@ -218,10 +221,11 @@ stop_capturing(int fd)
 static void
 init_mmap(int fd)
 {
-	struct v4l2_requestbuffers req = {0};
-	req.count = 4;
-	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	req.memory = V4L2_MEMORY_MMAP;
+	struct v4l2_requestbuffers req = {
+		.count = 4,
+		.type = current.type,
+		.memory = V4L2_MEMORY_MMAP,
+	};
 
 	if (xioctl(fd, VIDIOC_REQBUFS, &req) == -1) {
 		if (errno == EINVAL) {
@@ -248,21 +252,35 @@ init_mmap(int fd)
 
 	for (n_buffers = 0; n_buffers < req.count; ++n_buffers) {
 		struct v4l2_buffer buf = {
-			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.type = current.type,
 			.memory = V4L2_MEMORY_MMAP,
 			.index = n_buffers,
 		};
+
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+			buf.m.planes = buf_planes;
+			buf.length = 1;
+		}
 
 		if (xioctl(fd, VIDIOC_QUERYBUF, &buf) == -1) {
 			errno_exit("VIDIOC_QUERYBUF");
 		}
 
-		buffers[n_buffers].length = buf.length;
-		buffers[n_buffers].start = mmap(NULL /* start anywhere */,
-			buf.length,
-			PROT_READ | PROT_WRITE /* required */,
-			MAP_SHARED /* recommended */,
-			fd, buf.m.offset);
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+			buffers[n_buffers].length = buf.m.planes[0].length;
+			buffers[n_buffers].start = mmap(NULL /* start anywhere */,
+					buf.m.planes[0].length,
+					PROT_READ | PROT_WRITE /* required */,
+					MAP_SHARED /* recommended */,
+					fd, buf.m.planes[0].m.mem_offset);
+		} else {
+			buffers[n_buffers].length = buf.length;
+			buffers[n_buffers].start = mmap(NULL /* start anywhere */,
+					buf.length,
+					PROT_READ | PROT_WRITE /* required */,
+					MAP_SHARED /* recommended */,
+					fd, buf.m.offset);
+		}
 
 		if (MAP_FAILED == buffers[n_buffers].start) {
 			errno_exit("mmap");
@@ -497,7 +515,13 @@ init_device(int fd)
 		}
 	}
 
-	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+	// Detect buffer format for the interface node, preferring normal video capture
+	if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) {
+		current.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	} else if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
+		printf("[%s] Using the MPLANE buffer format\n", current.cfg_name);
+		current.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	} else {
 		fprintf(stderr, "%s is no video capture device\n",
 			current.dev_name);
 		exit(EXIT_FAILURE);
@@ -511,12 +535,12 @@ init_device(int fd)
 
 	/* Select video input, video standard and tune here. */
 	struct v4l2_cropcap cropcap = {
-		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.type = current.type,
 	};
 
 	struct v4l2_crop crop = {0};
 	if (xioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0) {
-		crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		crop.type = current.type;
 		crop.c = cropcap.defrect; /* reset to default */
 
 		if (xioctl(fd, VIDIOC_S_CROP, &crop) == -1) {
@@ -533,26 +557,43 @@ init_device(int fd)
 		/* Errors ignored. */
 	}
 
-
+	// Request a video format
 	struct v4l2_format fmt = {
-		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		.type = current.type,
 	};
 	if (current.width > 0) {
 		g_print("Setting camera to %dx%d fmt %d\n",
 			current.width, current.height, current.fmt);
-		fmt.fmt.pix.width = current.width;
-		fmt.fmt.pix.height = current.height;
-		fmt.fmt.pix.pixelformat = current.fmt;
-		fmt.fmt.pix.field = V4L2_FIELD_ANY;
+
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+			fmt.fmt.pix_mp.width = current.width;
+			fmt.fmt.pix_mp.height = current.height;
+			fmt.fmt.pix_mp.pixelformat = current.fmt;
+			fmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+		} else {
+			fmt.fmt.pix.width = current.width;
+			fmt.fmt.pix.height = current.height;
+			fmt.fmt.pix.pixelformat = current.fmt;
+			fmt.fmt.pix.field = V4L2_FIELD_ANY;
+		}
 
 		if (xioctl(fd, VIDIOC_S_FMT, &fmt) == -1) {
 			g_printerr("VIDIOC_S_FMT failed");
 			show_error("Could not set camera mode");
 			return -1;
 		}
-		if (fmt.fmt.pix.width != current.width ||
+
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE
+			&& (fmt.fmt.pix_mp.width != current.width ||
+			fmt.fmt.pix_mp.height != current.height ||
+			fmt.fmt.pix_mp.pixelformat != current.fmt))
+			g_printerr("Driver returned %dx%d fmt %d\n",
+				fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+				fmt.fmt.pix_mp.pixelformat);
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE
+			&& (fmt.fmt.pix.width != current.width ||
 			fmt.fmt.pix.height != current.height ||
-			fmt.fmt.pix.pixelformat != current.fmt)
+			fmt.fmt.pix.pixelformat != current.fmt))
 			g_printerr("Driver returned %dx%d fmt %d\n",
 				fmt.fmt.pix.width, fmt.fmt.pix.height,
 				fmt.fmt.pix.pixelformat);
@@ -563,22 +604,24 @@ init_device(int fd)
 		if (xioctl(fd, VIDIOC_G_FMT, &fmt) == -1) {
 			errno_exit("VIDIOC_G_FMT");
 		}
-		g_print("Got %dx%d fmt %d from the driver\n",
-			fmt.fmt.pix.width, fmt.fmt.pix.height,
-			fmt.fmt.pix.pixelformat);
-		current.width = fmt.fmt.pix.width;
-		current.height = fmt.fmt.pix.height;
+		if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+			g_print("Got %dx%d fmt %d from the driver\n",
+				fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+				fmt.fmt.pix_mp.pixelformat);
+			current.width = fmt.fmt.pix.width;
+			current.height = fmt.fmt.pix.height;
+		} else {
+			g_print("Got %dx%d fmt %d from the driver\n",
+				fmt.fmt.pix.width, fmt.fmt.pix.height,
+				fmt.fmt.pix.pixelformat);
+			current.width = fmt.fmt.pix_mp.width;
+			current.height = fmt.fmt.pix_mp.height;
+		}
 	}
-	current.fmt = fmt.fmt.pix.pixelformat;
-
-	/* Buggy driver paranoia. */
-	unsigned int min = fmt.fmt.pix.width * 2;
-	if (fmt.fmt.pix.bytesperline < min) {
-		fmt.fmt.pix.bytesperline = min;
-	}
-	min = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
-	if (fmt.fmt.pix.sizeimage < min) {
-		fmt.fmt.pix.sizeimage = min;
+	if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		current.fmt = fmt.fmt.pix_mp.pixelformat;
+	} else {
+		current.fmt = fmt.fmt.pix.pixelformat;
 	}
 
 	init_mmap(fd);
@@ -897,10 +940,19 @@ preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 static int
 read_frame(int fd)
 {
-	struct v4l2_buffer buf = {0};
+	int bytesused;
 
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	buf.memory = V4L2_MEMORY_MMAP;
+	struct v4l2_buffer buf = {
+		.type = current.type,
+		.memory = V4L2_MEMORY_MMAP,
+		.index = n_buffers,
+	};
+
+	if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		buf.m.planes = buf_planes;
+		buf.length = 1;
+	}
+
 	if (xioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
 		switch (errno) {
 			case EAGAIN:
@@ -914,9 +966,13 @@ read_frame(int fd)
 		}
 	}
 
-	//assert(buf.index < n_buffers);
+	if (current.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		bytesused = buf.m.planes[0].bytesused;
+	} else {
+		bytesused = buf.bytesused;
+	}
 
-	process_image(buffers[buf.index].start, buf.bytesused);
+	process_image(buffers[buf.index].start, bytesused);
 
 	if (xioctl(fd, VIDIOC_QBUF, &buf) == -1) {
 		errno_exit("VIDIOC_QBUF");
