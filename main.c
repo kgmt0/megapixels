@@ -21,6 +21,7 @@
 #include "quickpreview.h"
 
 #define NUM_CAMERAS 5
+#define NUM_LINKS 10
 
 enum user_control {
 	USER_CONTROL_ISO,
@@ -32,6 +33,16 @@ enum user_control {
 struct buffer {
 	void *start;
 	size_t length;
+};
+
+struct mp_media_link {
+	char source_name[100];
+	char target_name[100];
+	int source_port;
+	int target_port;
+	unsigned int source_entity_id;
+	unsigned int target_entity_id;
+	int valid;
 };
 
 struct camerainfo {
@@ -54,6 +65,8 @@ struct camerainfo {
 	int media_fd;
 	int video_fd;
 	unsigned int interface_entity_id;
+
+	struct mp_media_link media_links[10];
 
 	float colormatrix[9];
 	float forwardmatrix[9];
@@ -965,6 +978,8 @@ config_ini_handler(void *user, const char *section, const char *name,
 	int cid;
 	int found;
 	int first_free;
+	int i;
+
 	if (strcmp(section, "device") == 0) {
 		if (strcmp(name, "make") == 0) {
 			exif_make = strdup(value);
@@ -1034,6 +1049,27 @@ config_ini_handler(void *user, const char *section, const char *name,
 			strcpy(cc->dev_name, value);
 		} else if (strcmp(name, "media-driver") == 0) {
 			strcpy(cc->media_dev_name, value);
+		} else if (strcmp(name, "media-links") == 0) {
+			char **linkdefs;
+			linkdefs = g_strsplit(value, ",", 0);
+			i = 0;
+			while (linkdefs[i] != NULL) {
+				char **linkdef = g_strsplit(linkdefs[i], "->", 2);
+				char **porta = g_strsplit(linkdef[0], ":", 2);
+				char **portb = g_strsplit(linkdef[1], ":", 2);
+
+				cc->media_links[i].valid = 1;
+				strcpy(cc->media_links[i].source_name, porta[0]);
+				strcpy(cc->media_links[i].target_name, portb[0]);
+				cc->media_links[i].source_port = strtoint(porta[1], NULL, 10);
+				cc->media_links[i].target_port = strtoint(portb[1], NULL, 10);
+
+				g_strfreev(portb);
+				g_strfreev(porta);
+				g_strfreev(linkdef);
+				i++;
+			}
+			g_strfreev(linkdefs);
 		} else if (strcmp(name, "colormatrix") == 0) {
 			sscanf(value, "%f,%f,%f,%f,%f,%f,%f,%f,%f",
 					cc->colormatrix+0,
@@ -1127,7 +1163,6 @@ setup_camera(int cid)
 		}
 	}
 
-
 	// Enable the interface<->sensor link
 	link.flags = MEDIA_LNK_FL_ENABLED;
 	link.source.entity = cameras[cid].entity_id;
@@ -1136,10 +1171,39 @@ setup_camera(int cid)
 	link.sink.index = 0;
 
 	if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
-		g_printerr("[%s] Could not enable camera link\n", cameras[cid].cfg_name);
-		return -1;
-	}
+		g_printerr("[%s] Could not enable direct sensor->if link\n", cameras[cid].cfg_name);
+		
+		for(int i=0;i<10; i++) {
+			if (!cameras[cid].media_links[i].valid)
+				continue;
 
+			if (cameras[cid].media_links[i].source_entity_id < 1) {
+				g_printerr("[%s] media entry [%s] not found\n",
+						cameras[cid].cfg_name,
+						cameras[cid].media_links[i].source_name);
+			}
+			if (cameras[cid].media_links[i].target_entity_id < 1) {
+				g_printerr("[%s] media entry [%s] not found\n",
+						cameras[cid].cfg_name,
+						cameras[cid].media_links[i].target_name);
+			}
+
+			link.flags = MEDIA_LNK_FL_ENABLED;
+			link.source.entity = cameras[cid].media_links[i].source_entity_id;
+			link.source.index = cameras[cid].media_links[i].source_port;
+			link.sink.entity = cameras[cid].media_links[i].target_entity_id;
+			link.sink.index = cameras[cid].media_links[i].target_port;
+			if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
+				g_printerr("[%s] Could not link [%s:%d] -> [%s:%d]\n",
+						cameras[cid].cfg_name,
+						cameras[cid].media_links[i].source_name,
+						cameras[cid].media_links[i].source_port,
+						cameras[cid].media_links[i].target_name,
+						cameras[cid].media_links[i].target_port);
+				
+			}
+		}
+	}
 	current = cameras[cid];
 
 	// Find camera node
@@ -1197,6 +1261,20 @@ find_camera_found_media:
 			find_dev_node(entity.dev.major, entity.dev.minor, cameras[cid].video_dev_fname);
 			printf("[%s] video: %s (%s)\n", cameras[cid].cfg_name, cameras[cid].video_dev_fname, entity.name);
 			found_interface = 1;
+		}
+
+		for (int i=0; i<NUM_LINKS; i++) {
+			if(!cameras[cid].media_links[i].valid)
+				continue;
+
+			if(strncmp(entity.name, cameras[cid].media_links[i].source_name,
+					strlen(cameras[cid].media_links[i].source_name)) == 0) {
+				cameras[cid].media_links[i].source_entity_id = entity.id;
+			}
+			if(strncmp(entity.name, cameras[cid].media_links[i].target_name,
+					strlen(cameras[cid].media_links[i].target_name)) == 0) {
+				cameras[cid].media_links[i].target_entity_id = entity.id;
+			}
 		}
 	}
 
