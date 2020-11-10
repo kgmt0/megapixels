@@ -66,7 +66,7 @@ struct camerainfo {
 	int video_fd;
 	unsigned int interface_entity_id;
 
-	struct mp_media_link media_links[10];
+	struct mp_media_link media_links[NUM_LINKS];
 
 	float colormatrix[9];
 	float forwardmatrix[9];
@@ -1173,7 +1173,7 @@ setup_camera(int cid)
 	if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("[%s] Could not enable direct sensor->if link\n", cameras[cid].cfg_name);
 		
-		for(int i=0;i<10; i++) {
+		for(int i=0;i<NUM_LINKS; i++) {
 			if (!cameras[cid].media_links[i].valid)
 				continue;
 
