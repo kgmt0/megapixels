@@ -715,29 +715,13 @@ process_image(const int *p, int size)
 	static const float neutral[] = {1.0, 1.0, 1.0};
 	static uint16_t isospeed[] = {0};
 
-	/*
-	int sizing = -1;
-
-	switch(current.fmt) {
-		case V4L2_PIX_FMT_SBGGR8:
-		case V4L2_PIX_FMT_SGBRG8:
-		case V4L2_PIX_FMT_SGRBG8:
-		case V4L2_PIX_FMT_SRGGB8:
-			sizing = 1;
-			break;
-		case V4L2_PIX_FMT_UYVY:
-			sizing = 2;
-			break;
-	}
-	*/
-
 	// Only process preview frames when not capturing
 	if (capture == 0) {
-		if(current.width > 1920) {
-			skip = 3;
-		}
 		if(current.width > 1281) {
 			skip = 2;
+		}
+		if(current.width > 1920) {
+			skip = 3;
 		}
 		pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, current.width / (skip*2), current.height / (skip*2));
 		pixels = gdk_pixbuf_get_pixels(pixbuf);
