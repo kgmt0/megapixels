@@ -40,36 +40,72 @@ void quick_debayer(const uint8_t *source, uint8_t *destination,
 		   uint32_t pix_fmt, int width, int height, int skip,
 		   int blacklevel)
 {
-	int byteskip = 2 * skip;
+	int fragmentsize = 4;
+	int byteskip = fragmentsize * skip;
 	int input_size = width * height;
 	int i = 0, j = 0;
 	int row_left = width;
+	switch (pix_fmt) {
+		case V4L2_PIX_FMT_SBGGR8:
+		case V4L2_PIX_FMT_SGBRG8:
+		case V4L2_PIX_FMT_SGRBG8:
+		case V4L2_PIX_FMT_SRGGB8:
+			break;
+		case V4L2_PIX_FMT_SBGGR10P:
+		case V4L2_PIX_FMT_SGBRG10P:
+		case V4L2_PIX_FMT_SGRBG10P:
+		case V4L2_PIX_FMT_SRGGB10P:
+			fragmentsize = 4;
+			byteskip = fragmentsize * skip;
+			break;
+	}
+
 
 	do {
 		uint8_t b0 = srgb[source[i] - blacklevel];
 		uint8_t b1 = srgb[source[i + 1] - blacklevel];
 		uint8_t b2 = srgb[source[i + width + 1] - blacklevel];
+		uint8_t b3 = srgb[source[i + 2] - blacklevel];
+		uint8_t b4 = srgb[source[i + 3] - blacklevel];
+		uint8_t b5 = srgb[source[i + width + 2] - blacklevel];
 
 		switch (pix_fmt) {
 			case V4L2_PIX_FMT_SBGGR8:
+			case V4L2_PIX_FMT_SBGGR10P:
 				quick_debayer_set_dst(&destination[j],
 						      b2, b1, b0);
+				j += 3;
+				quick_debayer_set_dst(&destination[j],
+						      b5, b4, b3);
 				break;
 			case V4L2_PIX_FMT_SGBRG8:
+			case V4L2_PIX_FMT_SGBRG10P:
 				quick_debayer_set_dst(&destination[j],
 						      b1, b2, b0);
+				j += 3;
+				quick_debayer_set_dst(&destination[j],
+						      b4, b4, b3);
 				break;
 			case V4L2_PIX_FMT_SGRBG8:
+			case V4L2_PIX_FMT_SGRBG10P:
 				quick_debayer_set_dst(&destination[j],
 						      b1, b0, b2);
+				j += 3;
+				quick_debayer_set_dst(&destination[j],
+						      b4, b3, b5);
 				break;
 			case V4L2_PIX_FMT_SRGGB8:
+			case V4L2_PIX_FMT_SRGGB10P:
 				/* fall through */
 			default:
 				quick_debayer_set_dst(&destination[j],
 						      b0, b1, b2);
+				j += 3;
+				quick_debayer_set_dst(&destination[j],
+						      b3, b4, b5);
 				break;
 		}
+
 		j += 3;
 
 		i = i + byteskip;
