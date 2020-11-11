@@ -42,6 +42,8 @@ struct mp_media_link {
 	int target_port;
 	unsigned int source_entity_id;
 	unsigned int target_entity_id;
+	char source_fname[260];
+	char target_fname[260];
 	int valid;
 };
 
@@ -473,6 +475,7 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 		g_printerr("Driver chose %dx%d fmt %d instead\n",
 			fmt.format.width, fmt.format.height,
 			fmt.format.code);
+	
 
 	// Trigger continuous auto focus if the sensor supports it
 	if (v4l2_has_control(fd, V4L2_CID_FOCUS_AUTO)) {
@@ -499,6 +502,53 @@ init_sensor(char *fn, int width, int height, int mbus, int rate)
 
 	close(current.fd);
 	current.fd = fd;
+}
+
+int
+find_dev_node(int maj, int min, char *fnbuf)
+{
+	DIR *d;
+	struct dirent *dir;
+	struct stat info;
+	d = opendir("/dev");
+	while ((dir = readdir(d)) != NULL) {
+		sprintf(fnbuf, "/dev/%s", dir->d_name);
+		stat(fnbuf, &info);
+		if (!S_ISCHR(info.st_mode)) {
+			continue;
+		}
+		if (major(info.st_rdev) == maj && minor(info.st_rdev) == min) {
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static void
+init_media_entity(char *fn, int width, int height, int mbus)
+{
+	int fd;
+	struct v4l2_subdev_format fmt = {};
+
+	fd = open(fn, O_RDWR);
+
+	// Apply mode to v4l2 subdev
+	g_print("Setting node to %dx%d fmt %d\n",
+		width, height, mbus);
+	fmt.pad = 0;
+	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	fmt.format.code = mbus;
+	fmt.format.width = width;
+	fmt.format.height = height;
+	fmt.format.field = V4L2_FIELD_ANY;
+
+	if (xioctl(fd, VIDIOC_SUBDEV_S_FMT, &fmt) == -1) {
+		errno_exit("VIDIOC_SUBDEV_S_FMT");
+	}
+	if (fmt.format.width != width || fmt.format.height != height || fmt.format.code != mbus)
+		g_printerr("Driver chose %dx%d fmt %d instead\n",
+			fmt.format.width, fmt.format.height,
+			fmt.format.code);
 }
 
 static int
@@ -697,6 +747,7 @@ process_image(const int *p, int size)
 			case V4L2_PIX_FMT_SGBRG8:
 			case V4L2_PIX_FMT_SGRBG8:
 			case V4L2_PIX_FMT_SRGGB8:
+			case V4L2_PIX_FMT_SRGGB10P:
 				quick_debayer((const uint8_t *)p, pixels, current.fmt,
 						current.width, current.height, skip,
 						current.blacklevel);
@@ -1094,6 +1145,9 @@ config_ini_handler(void *user, const char *section, const char *name,
 			} else if (strcmp(value, "GBRG8") == 0) {
 				cc->fmt = V4L2_PIX_FMT_SGBRG8;
 				cc->mbus = MEDIA_BUS_FMT_SGBRG8_1X8;
+			} else if (strcmp(value, "RGGB10P") == 0) {
+				cc->fmt = V4L2_PIX_FMT_SRGGB10P;
+				cc->mbus = MEDIA_BUS_FMT_SRGGB10_1X10;
 			} else if (strcmp(value, "UYVY") == 0) {
 				cc->fmt = V4L2_PIX_FMT_UYVY;
 				cc->mbus = MEDIA_BUS_FMT_UYVY8_2X8;
@@ -1173,26 +1227,6 @@ config_ini_handler(void *user, const char *section, const char *name,
 }
 
 int
-find_dev_node(int maj, int min, char *fnbuf)
-{
-	DIR *d;
-	struct dirent *dir;
-	struct stat info;
-	d = opendir("/dev");
-	while ((dir = readdir(d)) != NULL) {
-		sprintf(fnbuf, "/dev/%s", dir->d_name);
-		stat(fnbuf, &info);
-		if (!S_ISCHR(info.st_mode)) {
-			continue;
-		}
-		if (major(info.st_rdev) == maj && minor(info.st_rdev) == min) {
-			return 0;
-		}
-	}
-	return -1;
-}
-
-int
 setup_camera(int cid)
 {
 	struct media_link_desc link = {0};
@@ -1226,6 +1260,8 @@ setup_camera(int cid)
 	link.sink.entity = cameras[cid].interface_entity_id;
 	link.sink.index = 0;
 
+	current = cameras[cid];
+
 	if (xioctl(cameras[cid].media_fd, MEDIA_IOC_SETUP_LINK, &link) < 0) {
 		g_printerr("[%s] Could not enable direct sensor->if link\n", cameras[cid].cfg_name);
 		
@@ -1258,9 +1294,10 @@ setup_camera(int cid)
 						cameras[cid].media_links[i].target_port);
 				
 			}
+			init_media_entity(cameras[cid].media_links[i].source_fname, current.width, current.height, current.mbus);
+			init_media_entity(cameras[cid].media_links[i].target_fname, current.width, current.height, current.mbus);
 		}
 	}
-	current = cameras[cid];
 
 	// Find camera node
 	init_sensor(current.dev_fname, current.width, current.height, current.mbus, current.rate);
@@ -1326,10 +1363,14 @@ find_camera_found_media:
 			if(strncmp(entity.name, cameras[cid].media_links[i].source_name,
 					strlen(cameras[cid].media_links[i].source_name)) == 0) {
 				cameras[cid].media_links[i].source_entity_id = entity.id;
+				find_dev_node(entity.dev.major, entity.dev.minor, cameras[cid].media_links[i].source_fname);
+				printf("[%s] isp: %s (%s)\n", cameras[cid].cfg_name, cameras[cid].media_links[i].source_fname, entity.name);
 			}
 			if(strncmp(entity.name, cameras[cid].media_links[i].target_name,
 					strlen(cameras[cid].media_links[i].target_name)) == 0) {
 				cameras[cid].media_links[i].target_entity_id = entity.id;
+				find_dev_node(entity.dev.major, entity.dev.minor, cameras[cid].media_links[i].target_fname);
+				printf("[%s] isp: %s (%s)\n", cameras[cid].cfg_name, cameras[cid].media_links[i].target_fname, entity.name);
 			}
 		}
 	}
