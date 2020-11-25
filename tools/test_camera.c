@@ -16,7 +16,7 @@ double get_time()
 
 void on_capture(MPImage image, void *user_data)
 {
-    size_t num_bytes = mp_pixel_format_bytes_per_pixel(image.pixel_format) * image.width * image.height;
+    size_t num_bytes = mp_pixel_format_width_to_bytes(image.pixel_format, image.width) * image.height;
     uint8_t *data = malloc(num_bytes);
     memcpy(data, image.data, num_bytes);
 

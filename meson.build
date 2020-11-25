@@ -16,7 +16,12 @@ configure_file(
   output: 'config.h',
   configuration: conf )
 
-executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', 'camera.c', 'device.c', 'pipeline.c', resources, dependencies : [gtkdep, libm, tiff, threads], install : true)
+# Define DEBUG for debug builds only (debugoptimized is not included on this one)
+if get_option('buildtype') == 'debug'
+  add_global_arguments('-DDEBUG', language: 'c')
+endif
+
+executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', 'camera.c', 'device.c', 'pipeline.c', 'camera_config.c', 'io_pipeline.c', 'process_pipeline.c', resources, dependencies : [gtkdep, libm, tiff, threads], install : true)
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')
@@ -42,3 +47,6 @@ install_data(['postprocess.sh'],
 
 executable('list_devices', 'tools/list_devices.c', 'device.c', dependencies: [gtkdep])
 executable('test_camera', 'tools/test_camera.c', 'camera.c', 'device.c', dependencies: [gtkdep])
+
+test_quickpreview = executable('test_quickpreview', 'tests/test_quickpreview.c', 'quickpreview.c', 'camera.c', dependencies: [gtkdep])
+test('quickpreview', test_quickpreview)
