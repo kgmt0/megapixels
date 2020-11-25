@@ -42,6 +42,7 @@ typedef struct _MPDeviceList MPDeviceList;
 MPDeviceList *mp_device_list_new();
 void mp_device_list_free(MPDeviceList *device_list);
 
+MPDevice *mp_device_list_find_remove(MPDeviceList **device_list, const char *driver_name);
 MPDevice *mp_device_list_remove(MPDeviceList **device_list);
 
 MPDevice *mp_device_list_get(const MPDeviceList *device_list);

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <glib.h>
+#include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
@@ -14,6 +15,12 @@ static const char *pixel_format_names[MP_PIXEL_FMT_MAX] = {
     "GBRG8",
     "GRBG8",
     "RGGB8",
+    "BGGR10P",
+    "GBRG10P",
+    "GRBG10P",
+    "RGGB10P",
+    "UYVY",
+    "YUYV",
 };
 
 const char *mp_pixel_format_to_str(uint32_t pixel_format)
@@ -38,6 +45,12 @@ static const uint32_t pixel_format_v4l_pixel_formats[MP_PIXEL_FMT_MAX] = {
     V4L2_PIX_FMT_SGBRG8,
     V4L2_PIX_FMT_SGRBG8,
     V4L2_PIX_FMT_SRGGB8,
+    V4L2_PIX_FMT_SBGGR10P,
+    V4L2_PIX_FMT_SGBRG10P,
+    V4L2_PIX_FMT_SGRBG10P,
+    V4L2_PIX_FMT_SRGGB10P,
+    V4L2_PIX_FMT_UYVY,
+    V4L2_PIX_FMT_YUYV,
 };
 
 uint32_t mp_pixel_format_to_v4l_pixel_format(MPPixelFormat pixel_format)
@@ -62,6 +75,12 @@ static const uint32_t pixel_format_v4l_bus_codes[MP_PIXEL_FMT_MAX] = {
     MEDIA_BUS_FMT_SGBRG8_1X8,
     MEDIA_BUS_FMT_SGRBG8_1X8,
     MEDIA_BUS_FMT_SRGGB8_1X8,
+    MEDIA_BUS_FMT_SBGGR10_1X10,
+    MEDIA_BUS_FMT_SGBRG10_1X10,
+    MEDIA_BUS_FMT_SGRBG10_1X10,
+    MEDIA_BUS_FMT_SRGGB10_1X10,
+    MEDIA_BUS_FMT_UYVY8_2X8,
+    MEDIA_BUS_FMT_YUYV8_2X8,
 };
 
 uint32_t mp_pixel_format_to_v4l_bus_code(MPPixelFormat pixel_format)
@@ -80,14 +99,68 @@ MPPixelFormat mp_pixel_format_from_v4l_bus_code(uint32_t v4l_bus_code)
     return MP_PIXEL_FMT_UNSUPPORTED;
 }
 
-uint32_t mp_pixel_format_bytes_per_pixel(MPPixelFormat pixel_format)
+uint32_t mp_pixel_format_bits_per_pixel(MPPixelFormat pixel_format)
 {
     g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
     switch (pixel_format) {
         case MP_PIXEL_FMT_BGGR8:
         case MP_PIXEL_FMT_GBRG8:
         case MP_PIXEL_FMT_GRBG8:
-        case MP_PIXEL_FMT_RGGB8: return 1;
+        case MP_PIXEL_FMT_RGGB8: return 8;
+        case MP_PIXEL_FMT_BGGR10P:
+        case MP_PIXEL_FMT_GBRG10P:
+        case MP_PIXEL_FMT_GRBG10P:
+        case MP_PIXEL_FMT_RGGB10P: return 10;
+        case MP_PIXEL_FMT_UYVY:
+        case MP_PIXEL_FMT_YUYV: return 16;
+        default: return 0;
+    }
+}
+
+uint32_t mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width)
+{
+    uint32_t bits_per_pixel = mp_pixel_format_bits_per_pixel(pixel_format);
+    uint64_t bits_per_width = width * (uint64_t) bits_per_pixel;
+
+    uint64_t remainder = bits_per_width % 8;
+    if (remainder == 0)
+        return bits_per_width / 8;
+
+    return (bits_per_width + 8 - remainder) / 8;
+}
+
+uint32_t mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width)
+{
+    g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+    switch (pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_RGGB8: return width / 2;
+        case MP_PIXEL_FMT_BGGR10P:
+        case MP_PIXEL_FMT_GBRG10P:
+        case MP_PIXEL_FMT_GRBG10P:
+        case MP_PIXEL_FMT_RGGB10P: return width / 2 * 5;
+        case MP_PIXEL_FMT_UYVY:
+        case MP_PIXEL_FMT_YUYV: return width;
+        default: return 0;
+    }
+}
+
+uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format, uint32_t height)
+{
+    g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+    switch (pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_RGGB8:
+        case MP_PIXEL_FMT_BGGR10P:
+        case MP_PIXEL_FMT_GBRG10P:
+        case MP_PIXEL_FMT_GRBG10P:
+        case MP_PIXEL_FMT_RGGB10P: return height / 2;
+        case MP_PIXEL_FMT_UYVY:
+        case MP_PIXEL_FMT_YUYV: return height;
         default: return 0;
     }
 }
@@ -427,7 +500,7 @@ bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *)
     uint32_t width = camera->current_mode.width;
     uint32_t height = camera->current_mode.height;
 
-    assert(buf.bytesused == mp_pixel_format_bytes_per_pixel(pixel_format) * width * height);
+    assert(buf.bytesused == mp_pixel_format_width_to_bytes(pixel_format, width) * height);
     assert(buf.bytesused == camera->buffers[buf.index].length);
 
     MPImage image = {
