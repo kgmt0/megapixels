@@ -3,8 +3,9 @@
  * pixels and doesn't interpolate any values at all
  */
 
-#include <linux/videodev2.h>
 #include "quickpreview.h"
+#include <assert.h>
+#include <stdio.h>
 
 /* Linear -> sRGB lookup table */
 static const int srgb[] = {
@@ -28,138 +29,350 @@ static const int srgb[] = {
 	250, 250, 251, 251, 251, 252, 252, 253, 253, 254, 254, 255
 };
 
-static void quick_debayer_set_dst(uint8_t *dst, uint8_t p0, uint8_t p1,
-				  uint8_t p2)
+static inline uint32_t pack_rgb(uint8_t r, uint8_t g, uint8_t b)
 {
-	dst[0] = p0;
-	dst[1] = p1;
-	dst[2] = p2;
+	return (r << 16) | (g << 8) | b;
 }
 
-void quick_debayer(const uint8_t *source, uint8_t *destination,
-		   uint32_t pix_fmt, int width, int height, int skip,
-		   int blacklevel)
+static inline uint32_t convert_yuv_to_srgb(uint8_t y, uint8_t u, uint8_t v)
 {
-	int fragmentsize = 4;
-	int byteskip = fragmentsize * skip;
-	int input_size = width * height;
-	int i = 0, j = 0;
-	int row_left = width;
-	switch (pix_fmt) {
-		case V4L2_PIX_FMT_SBGGR8:
-		case V4L2_PIX_FMT_SGBRG8:
-		case V4L2_PIX_FMT_SGRBG8:
-		case V4L2_PIX_FMT_SRGGB8:
-			break;
-		case V4L2_PIX_FMT_SBGGR10P:
-		case V4L2_PIX_FMT_SGBRG10P:
-		case V4L2_PIX_FMT_SGRBG10P:
-		case V4L2_PIX_FMT_SRGGB10P:
-			fragmentsize = 4;
-			byteskip = fragmentsize * skip;
-			break;
+	uint32_t r = 1.164f * y + 1.596f * (v - 128);
+	uint32_t g = 1.164f * y - 0.813f * (v - 128) - 0.391f * (u - 128);
+	uint32_t b = 1.164f * y + 2.018f * (u - 128);
+	return pack_rgb(r, g, b);
+}
+
+static inline uint32_t apply_colormatrix(uint32_t color, const float *colormatrix)
+{
+	if (!colormatrix) {
+		return color;
 	}
 
-
-	do {
-		uint8_t b0 = srgb[source[i] - blacklevel];
-		uint8_t b1 = srgb[source[i + 1] - blacklevel];
-		uint8_t b2 = srgb[source[i + width + 1] - blacklevel];
-		uint8_t b3 = srgb[source[i + 2] - blacklevel];
-		uint8_t b4 = srgb[source[i + 3] - blacklevel];
-		uint8_t b5 = srgb[source[i + width + 2] - blacklevel];
-
-		switch (pix_fmt) {
-			case V4L2_PIX_FMT_SBGGR8:
-			case V4L2_PIX_FMT_SBGGR10P:
-				quick_debayer_set_dst(&destination[j],
-						      b2, b1, b0);
-				j += 3;
-				quick_debayer_set_dst(&destination[j],
-						      b5, b4, b3);
-				break;
-			case V4L2_PIX_FMT_SGBRG8:
-			case V4L2_PIX_FMT_SGBRG10P:
-				quick_debayer_set_dst(&destination[j],
-						      b1, b2, b0);
-				j += 3;
-				quick_debayer_set_dst(&destination[j],
-						      b4, b4, b3);
-				break;
-			case V4L2_PIX_FMT_SGRBG8:
-			case V4L2_PIX_FMT_SGRBG10P:
-				quick_debayer_set_dst(&destination[j],
-						      b1, b0, b2);
-				j += 3;
-				quick_debayer_set_dst(&destination[j],
-						      b4, b3, b5);
-				break;
-			case V4L2_PIX_FMT_SRGGB8:
-			case V4L2_PIX_FMT_SRGGB10P:
-				/* fall through */
-			default:
-				quick_debayer_set_dst(&destination[j],
-						      b0, b1, b2);
-				j += 3;
-				quick_debayer_set_dst(&destination[j],
-						      b3, b4, b5);
-				break;
-		}
-
-		j += 3;
-
-		i = i + byteskip;
-		row_left = row_left - byteskip;
-		if(row_left < byteskip){
-			i = i + row_left;
-			row_left = width;
-			i = i + width;
-			i = i + (width * 2 * (skip-1));
-		}
-	} while (i < input_size);
+	uint32_t r = (color >> 16) * colormatrix[0] + ((color >> 8) & 0xFF) * colormatrix[1] + (color & 0xFF) * colormatrix[2];
+	uint32_t g = (color >> 16) * colormatrix[3] + ((color >> 8) & 0xFF) * colormatrix[4] + (color & 0xFF) * colormatrix[5];
+	uint32_t b = (color >> 16) * colormatrix[6] + ((color >> 8) & 0xFF) * colormatrix[7] + (color & 0xFF) * colormatrix[8];
+	return pack_rgb(r, g, b);
 }
 
-
-// YUV 4:2:2 to RGB conversion
-void quick_yuv2rgb(const uint8_t *source, uint8_t *destination,
-		uint32_t pix_fmt, int width, int height, int skip)
+static inline uint32_t coord_map(uint32_t x, uint32_t y, uint32_t width, uint32_t height, int rotation, bool mirrored)
 {
-	int stride = width * 2;
-	int pixelsize = 4;
-	int input_size = width * 2 * height;
-	int i = 0, j = 0;
-	int row_left = stride;
-	uint8_t Y1, Y2, U, V;
-	do {
-		switch (pix_fmt) {
-			case V4L2_PIX_FMT_UYVY:
-				Y1 = source[i+1];
-				Y2 = source[i+3];
-				U = source[i];
-				V = source[i+2];
-				break;
-			case V4L2_PIX_FMT_YUYV:
-				Y1 = source[i];
-				Y2 = source[i+2];
-				U = source[i+1];
-				V = source[i+3];
-				break;
-		}
-		destination[j] = 1.164f * Y1 + 1.596f * (V - 128);
-		destination[j+1] = 1.164f * Y1 - 0.813f * (V - 128) - 0.391f * (U - 128);
-		destination[j+2] = 1.164f * Y1 + 2.018f * (U - 128);
-		j += 3;
-		destination[j] = 1.164f * Y2 + 1.596f * (V - 128);
-		destination[j+1] = 1.164f * Y2 - 0.813f * (V - 128) - 0.391f * (U - 128);
-		destination[j+2] = 1.164f * Y2 + 2.018f * (U - 128);
-		j += 3;
+	uint32_t x_r, y_r;
+	if (rotation == 0) {
+		x_r = x;
+		y_r = y;
+	} else if (rotation == 90) {
+		x_r = y;
+		y_r = height - x - 1;
+	} else if (rotation == 270) {
+		x_r = width - y - 1;
+		y_r = x;
+	} else {
+		x_r = width - x - 1;
+		y_r = height - y - 1;
+	}
 
-		i += pixelsize * skip * 2;
-		row_left -= (pixelsize * skip * 2);
-		if(row_left < (pixelsize * skip * 2)){
-			i = i + row_left;
-			row_left = width;
-			i = i + (stride * skip);
+	if (mirrored) {
+		x_r = width - x_r - 1;
+	}
+
+	uint32_t index = y_r * width + x_r;
+#ifdef DEBUG
+	assert(index < width * height);
+#endif
+	return index;
+}
+
+static void quick_preview_rggb8(
+	uint32_t *dst,
+	const uint32_t dst_width,
+	const uint32_t dst_height,
+	const uint8_t *src,
+	const uint32_t src_width,
+	const uint32_t src_height,
+	const MPPixelFormat format,
+	const uint32_t rotation,
+	const bool mirrored,
+	const float *colormatrix,
+	const uint8_t blacklevel,
+	const uint32_t skip)
+{
+	uint32_t src_y = 0, dst_y = 0;
+	while (src_y < src_height) {
+		uint32_t src_x = 0, dst_x = 0;
+		while (src_x < src_width) {
+			uint32_t src_i = src_y * src_width + src_x;
+
+			uint8_t b0 = srgb[src[src_i] - blacklevel];
+			uint8_t b1 = srgb[src[src_i + 1] - blacklevel];
+			uint8_t b2 = srgb[src[src_i + src_width + 1] - blacklevel];
+
+			uint32_t color;
+			switch (format) {
+				case MP_PIXEL_FMT_BGGR8:
+					color = pack_rgb(b2, b1, b0);
+					break;
+				case MP_PIXEL_FMT_GBRG8:
+					color = pack_rgb(b2, b0, b1);
+					break;
+				case MP_PIXEL_FMT_GRBG8:
+					color = pack_rgb(b1, b0, b2);
+					break;
+				case MP_PIXEL_FMT_RGGB8:
+					color = pack_rgb(b0, b1, b2);
+					break;
+				default:
+					assert(false);
+			}
+
+			color = apply_colormatrix(color, colormatrix);
+
+			// printf("?? %d:%d\n", dst_x, dst_y);
+			dst[coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored)] = color;
+
+			src_x += 2 + 2 * skip;
+			++dst_x;
 		}
-	} while (i < input_size);
+
+		src_y += 2 + 2 * skip;
+		++dst_y;
+	}
+}
+
+static void quick_preview_rggb10(
+	uint32_t *dst,
+	const uint32_t dst_width,
+	const uint32_t dst_height,
+	const uint8_t *src,
+	const uint32_t src_width,
+	const uint32_t src_height,
+	const MPPixelFormat format,
+	const uint32_t rotation,
+	const bool mirrored,
+	const float *colormatrix,
+	const uint8_t blacklevel,
+	const uint32_t skip)
+{
+	assert(src_width % 2 == 0);
+
+	uint32_t width_bytes = mp_pixel_format_width_to_bytes(format, src_width);
+
+	uint32_t src_y = 0, dst_y = 0;
+	while (src_y < src_height) {
+		uint32_t src_x = 0, dst_x = 0;
+		while (src_x < width_bytes) {
+			uint32_t src_i = src_y * width_bytes + src_x;
+
+			uint8_t b0 = srgb[src[src_i] - blacklevel];
+			uint8_t b1 = srgb[src[src_i + 1] - blacklevel];
+			uint8_t b2 = srgb[src[src_i + width_bytes + 1] - blacklevel];
+
+			uint32_t color;
+			switch (format) {
+				case MP_PIXEL_FMT_BGGR10P:
+					color = pack_rgb(b2, b1, b0);
+					break;
+				case MP_PIXEL_FMT_GBRG10P:
+					color = pack_rgb(b2, b0, b1);
+					break;
+				case MP_PIXEL_FMT_GRBG10P:
+					color = pack_rgb(b1, b0, b2);
+					break;
+				case MP_PIXEL_FMT_RGGB10P:
+					color = pack_rgb(b0, b1, b2);
+					break;
+				default:
+					assert(false);
+			}
+
+			color = apply_colormatrix(color, colormatrix);
+
+			dst[coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored)] = color;
+
+			uint32_t advance = 1 + skip;
+			if (src_x % 5 == 0) {
+				src_x += 2 * (advance % 2) + 5 * (advance / 2);
+			} else {
+				src_x += 3 * (advance % 2) + 5 * (advance / 2);
+			}
+			++dst_x;
+		}
+
+		src_y += 2 + 2 * skip;
+		++dst_y;
+	}
+}
+
+static void quick_preview_yuv(
+	uint32_t *dst,
+	const uint32_t dst_width,
+	const uint32_t dst_height,
+	const uint8_t *src,
+	const uint32_t src_width,
+	const uint32_t src_height,
+	const MPPixelFormat format,
+	const uint32_t rotation,
+	const bool mirrored,
+	const float *colormatrix,
+	const uint32_t skip)
+{
+	assert(src_width % 2 == 0);
+
+	uint32_t width_bytes = src_width * 2;
+
+	uint32_t src_y = 0, dst_y = 0;
+	while (src_y < src_height) {
+		uint32_t src_x = 0, dst_x = 0;
+		while (src_x < width_bytes) {
+			uint32_t src_i = src_y * width_bytes + src_x;
+
+			uint8_t b0 = src[src_i];
+			uint8_t b1 = src[src_i + 1];
+			uint8_t b2 = src[src_i + 2];
+			uint8_t b3 = src[src_i + 3];
+
+			uint32_t color1, color2;
+			switch (format) {
+				case MP_PIXEL_FMT_UYVY:
+					color1 = convert_yuv_to_srgb(b1, b0, b2);
+					color2 = convert_yuv_to_srgb(b3, b0, b2);
+					break;
+				case MP_PIXEL_FMT_YUYV:
+					color1 = convert_yuv_to_srgb(b0, b1, b3);
+					color2 = convert_yuv_to_srgb(b2, b1, b3);
+					break;
+				default:
+					assert(false);
+			}
+
+			color1 = apply_colormatrix(color1, colormatrix);
+			color2 = apply_colormatrix(color2, colormatrix);
+
+			uint32_t dst_i1 = coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored);
+			dst[dst_i1] = color1;
+			++dst_x;
+
+			uint32_t dst_i2 = coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored);
+			dst[dst_i2] = color2;
+			++dst_x;
+
+			src_x += 4 + 4 * skip;
+		}
+
+		src_y += 1 + skip;
+		++dst_y;
+	}
+}
+
+void quick_preview(
+	uint32_t *dst,
+	const uint32_t dst_width,
+	const uint32_t dst_height,
+	const uint8_t *src,
+	const uint32_t src_width,
+	const uint32_t src_height,
+	const MPPixelFormat format,
+	const uint32_t rotation,
+	const bool mirrored,
+	const float *colormatrix,
+	const uint8_t blacklevel,
+	const uint32_t skip)
+{
+	switch (format) {
+		case MP_PIXEL_FMT_BGGR8:
+		case MP_PIXEL_FMT_GBRG8:
+		case MP_PIXEL_FMT_GRBG8:
+		case MP_PIXEL_FMT_RGGB8:
+			quick_preview_rggb8(
+				dst,
+				dst_width,
+				dst_height,
+				src,
+				src_width,
+				src_height,
+				format,
+				rotation,
+				mirrored,
+				colormatrix,
+				blacklevel,
+				skip);
+			break;
+		case MP_PIXEL_FMT_BGGR10P:
+		case MP_PIXEL_FMT_GBRG10P:
+		case MP_PIXEL_FMT_GRBG10P:
+		case MP_PIXEL_FMT_RGGB10P:
+			quick_preview_rggb10(
+				dst,
+				dst_width,
+				dst_height,
+				src,
+				src_width,
+				src_height,
+				format,
+				rotation,
+				mirrored,
+				colormatrix,
+				blacklevel,
+				skip);
+			break;
+		case MP_PIXEL_FMT_UYVY:
+		case MP_PIXEL_FMT_YUYV:
+			quick_preview_yuv(
+				dst,
+				dst_width,
+				dst_height,
+				src,
+				src_width,
+				src_height,
+				format,
+				rotation,
+				mirrored,
+				colormatrix,
+				skip);
+			break;
+		default:
+			assert(false);
+	}
+}
+
+static uint32_t div_ceil(uint32_t x, uint32_t y)
+{
+	return x/y + !!(x % y);
+}
+
+void quick_preview_size(
+	uint32_t *dst_width,
+	uint32_t *dst_height,
+	uint32_t *skip,
+	const uint32_t preview_width,
+	const uint32_t preview_height,
+	const uint32_t src_width,
+	const uint32_t src_height,
+	const MPPixelFormat format,
+	const int rotation)
+{
+	uint32_t colors_x = mp_pixel_format_width_to_colors(format, src_width);
+	uint32_t colors_y = mp_pixel_format_height_to_colors(format, src_height);
+
+	if (rotation != 0 && rotation != 180) {
+		uint32_t tmp = colors_x;
+		colors_x = colors_y;
+		colors_y = tmp;
+	}
+
+	uint32_t scale_x = colors_x / preview_width;
+	uint32_t scale_y = colors_y / preview_height;
+
+	if (scale_x > 0)
+		--scale_x;
+	if (scale_y > 0)
+		--scale_y;
+	*skip = scale_x > scale_y ? scale_x : scale_y;
+
+	*dst_width = div_ceil(colors_x, (1 + *skip));
+	if (*dst_width <= 0)
+		*dst_width = 1;
+
+	*dst_height = div_ceil(colors_y, (1 + *skip));
+	if (*dst_height <= 0)
+		*dst_height = 1;
 }
