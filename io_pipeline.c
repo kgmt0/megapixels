@@ -420,7 +420,6 @@ update_controls()
     }
 
     if (!desired_controls.exposure_is_manual && current_controls.exposure != desired_controls.exposure) {
-        printf("Setting exposure to %d\n", desired_controls.exposure);
         v4l2_ctrl_set(info->fd, V4L2_CID_EXPOSURE, desired_controls.exposure);
     }
 
@@ -449,7 +448,6 @@ on_frame(MPImage image, void *data)
             }
 
             if (image_is_blank) {
-                printf("Skipping blank image\n");
                 ++blank_frame_count;
                 return;
             }

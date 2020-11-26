@@ -351,7 +351,7 @@ void mp_process_pipeline_process_image(MPImage image)
 {
     // If we haven't processed the previous frame yet, drop this one
     if (frames_received != frames_processed && !is_capturing) {
-        printf("Dropped frame at capture %d %d\n", frames_received, frames_processed);
+        printf("Dropped frame at capture\n");
         return;
     }
 
