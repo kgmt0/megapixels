@@ -96,9 +96,13 @@ static GSource *capture_source;
 static int
 xioctl(int fd, int request, void *arg)
 {
+    int c = 0;
     int r;
     do {
         r = ioctl(fd, request, arg);
+        ++c;
+        if (c > 1)
+            printf("ioctl retry %d\n", c);
     } while (r == -1 && errno == EINTR);
     return r;
 }

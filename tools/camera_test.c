@@ -122,13 +122,26 @@ int main(int argc, char *argv[])
 
     MPCamera *camera = mp_camera_new(video_fd, subdev_fd);
 
+    MPControlList *controls = mp_camera_list_controls(camera);
+
+    double control_list_end = get_time();
+
+    printf("Available controls: (took %fms)\n", (control_list_end - open_end) * 1000);
+    for (MPControlList *list = controls; list; list = mp_control_list_next(list)) {
+        MPControl *c = mp_control_list_get(list);
+
+        printf("  %32s id:%s type:%s default:%d\n", c->name, mp_control_id_to_str(c->id), mp_control_type_to_str(c->type), c->default_value);
+    }
+
+    double mode_list_begin = get_time();
+
     MPCameraModeList *modes = mp_camera_list_available_modes(camera);
 
-    double list_end = get_time();
+    double mode_list_end = get_time();
 
-    printf("Available modes: (took %fms)\n", (list_end - open_end) * 1000);
-    for (MPCameraModeList *mode = modes; mode; mode = mp_camera_mode_list_next(mode)) {
-        MPCameraMode *m = mp_camera_mode_list_get(mode);
+    printf("Available modes: (took %fms)\n", (mode_list_end - mode_list_begin) * 1000);
+    for (MPCameraModeList *list = modes; list; list = mp_camera_mode_list_next(list)) {
+        MPCameraMode *m = mp_camera_mode_list_get(list);
         printf("  %dx%d interval:%d/%d fmt:%s\n", m->width, m->height, m->frame_interval.numerator, m->frame_interval.denominator, mp_pixel_format_to_str(m->pixel_format));
 
         // Skip really slow framerates

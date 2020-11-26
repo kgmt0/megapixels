@@ -20,8 +20,8 @@ typedef enum {
     MP_PIXEL_FMT_MAX,
 } MPPixelFormat;
 
-MPPixelFormat mp_pixel_format_from_str(const char *str);
 const char *mp_pixel_format_to_str(MPPixelFormat pixel_format);
+MPPixelFormat mp_pixel_format_from_str(const char *str);
 
 MPPixelFormat mp_pixel_format_from_v4l_pixel_format(uint32_t v4l_pixel_format);
 MPPixelFormat mp_pixel_format_from_v4l_bus_code(uint32_t v4l_bus_code);
@@ -75,3 +75,41 @@ MPCameraModeList *mp_camera_list_available_modes(MPCamera *camera);
 MPCameraMode *mp_camera_mode_list_get(MPCameraModeList *list);
 MPCameraModeList *mp_camera_mode_list_next(MPCameraModeList *list);
 void mp_camera_mode_list_free(MPCameraModeList *list);
+
+typedef struct {
+    uint32_t id;
+    uint32_t type;
+    char name[32];
+
+    int32_t min;
+    int32_t max;
+    int32_t step;
+    int32_t default_value;
+
+    uint32_t flags;
+
+    uint32_t element_size;
+    uint32_t element_count;
+    uint32_t dimensions_count;
+    uint32_t dimensions[V4L2_CTRL_MAX_DIMS];
+} MPControl;
+
+const char *mp_control_id_to_str(uint32_t id);
+const char *mp_control_type_to_str(uint32_t type);
+
+typedef struct _MPControlList MPControlList;
+
+MPControlList *mp_camera_list_controls(MPCamera *camera);
+MPControl *mp_control_list_get(MPControlList *list);
+MPControlList *mp_control_list_next(MPControlList *list);
+void mp_control_list_free(MPControlList *list);
+
+bool mp_camera_query_control(MPCamera *camera, uint32_t id, MPControl *control);
+
+bool mp_camera_control_try_int32(MPCamera *camera, uint32_t id, int32_t *v);
+bool mp_camera_control_set_int32(MPCamera *camera, uint32_t id, int32_t v);
+int32_t mp_camera_control_get_int32(MPCamera *camera, uint32_t id);
+
+bool mp_camera_control_try_bool(MPCamera *camera, uint32_t id, bool *v);
+bool mp_camera_control_set_bool(MPCamera *camera, uint32_t id, bool v);
+bool mp_camera_control_get_bool(MPCamera *camera, uint32_t id);

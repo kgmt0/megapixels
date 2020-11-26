@@ -808,3 +808,326 @@ void mp_camera_mode_list_free(MPCameraModeList *list)
         free(tmp);
     }
 }
+
+struct int_str_pair {
+    uint32_t value;
+    const char *str;
+};
+
+struct int_str_pair control_id_names[] = {
+    { V4L2_CID_BRIGHTNESS, "BRIGHTNESS" },
+    { V4L2_CID_CONTRAST, "CONTRAST" },
+    { V4L2_CID_SATURATION, "SATURATION" },
+    { V4L2_CID_HUE, "HUE" },
+    { V4L2_CID_AUDIO_VOLUME, "AUDIO_VOLUME" },
+    { V4L2_CID_AUDIO_BALANCE, "AUDIO_BALANCE" },
+    { V4L2_CID_AUDIO_BASS, "AUDIO_BASS" },
+    { V4L2_CID_AUDIO_TREBLE, "AUDIO_TREBLE" },
+    { V4L2_CID_AUDIO_MUTE, "AUDIO_MUTE" },
+    { V4L2_CID_AUDIO_LOUDNESS, "AUDIO_LOUDNESS" },
+    { V4L2_CID_BLACK_LEVEL, "BLACK_LEVEL" },
+    { V4L2_CID_AUTO_WHITE_BALANCE, "AUTO_WHITE_BALANCE" },
+    { V4L2_CID_DO_WHITE_BALANCE, "DO_WHITE_BALANCE" },
+    { V4L2_CID_RED_BALANCE, "RED_BALANCE" },
+    { V4L2_CID_BLUE_BALANCE, "BLUE_BALANCE" },
+    { V4L2_CID_GAMMA, "GAMMA" },
+    { V4L2_CID_WHITENESS, "WHITENESS" },
+    { V4L2_CID_EXPOSURE, "EXPOSURE" },
+    { V4L2_CID_AUTOGAIN, "AUTOGAIN" },
+    { V4L2_CID_GAIN, "GAIN" },
+    { V4L2_CID_HFLIP, "HFLIP" },
+    { V4L2_CID_VFLIP, "VFLIP" },
+    { V4L2_CID_POWER_LINE_FREQUENCY, "POWER_LINE_FREQUENCY" },
+    { V4L2_CID_HUE_AUTO, "HUE_AUTO" },
+    { V4L2_CID_WHITE_BALANCE_TEMPERATURE, "WHITE_BALANCE_TEMPERATURE" },
+    { V4L2_CID_SHARPNESS, "SHARPNESS" },
+    { V4L2_CID_BACKLIGHT_COMPENSATION, "BACKLIGHT_COMPENSATION" },
+    { V4L2_CID_CHROMA_AGC, "CHROMA_AGC" },
+    { V4L2_CID_COLOR_KILLER, "COLOR_KILLER" },
+    { V4L2_CID_COLORFX, "COLORFX" },
+    { V4L2_CID_AUTOBRIGHTNESS, "AUTOBRIGHTNESS" },
+    { V4L2_CID_BAND_STOP_FILTER, "BAND_STOP_FILTER" },
+    { V4L2_CID_ROTATE, "ROTATE" },
+    { V4L2_CID_BG_COLOR, "BG_COLOR" },
+    { V4L2_CID_CHROMA_GAIN, "CHROMA_GAIN" },
+    { V4L2_CID_ILLUMINATORS_1, "ILLUMINATORS_1" },
+    { V4L2_CID_ILLUMINATORS_2, "ILLUMINATORS_2" },
+    { V4L2_CID_MIN_BUFFERS_FOR_CAPTURE, "MIN_BUFFERS_FOR_CAPTURE" },
+    { V4L2_CID_MIN_BUFFERS_FOR_OUTPUT, "MIN_BUFFERS_FOR_OUTPUT" },
+    { V4L2_CID_ALPHA_COMPONENT, "ALPHA_COMPONENT" },
+    { V4L2_CID_COLORFX_CBCR, "COLORFX_CBCR" },
+    { V4L2_CID_LASTP1, "LASTP1" },
+    { V4L2_CID_USER_MEYE_BASE, "USER_MEYE_BASE" },
+    { V4L2_CID_USER_BTTV_BASE, "USER_BTTV_BASE" },
+    { V4L2_CID_USER_S2255_BASE, "USER_S2255_BASE" },
+    { V4L2_CID_USER_SI476X_BASE, "USER_SI476X_BASE" },
+    { V4L2_CID_USER_TI_VPE_BASE, "USER_TI_VPE_BASE" },
+    { V4L2_CID_USER_SAA7134_BASE, "USER_SAA7134_BASE" },
+    { V4L2_CID_USER_ADV7180_BASE, "USER_ADV7180_BASE" },
+    { V4L2_CID_USER_TC358743_BASE, "USER_TC358743_BASE" },
+    { V4L2_CID_USER_MAX217X_BASE, "USER_MAX217X_BASE" },
+    { V4L2_CID_USER_IMX_BASE, "USER_IMX_BASE" },
+    // { V4L2_CID_USER_ATMEL_ISC_BASE, "USER_ATMEL_ISC_BASE" },
+    { V4L2_CID_CAMERA_CLASS_BASE, "CAMERA_CLASS_BASE" },
+    { V4L2_CID_CAMERA_CLASS, "CAMERA_CLASS" },
+    { V4L2_CID_EXPOSURE_AUTO, "EXPOSURE_AUTO" },
+    { V4L2_CID_EXPOSURE_ABSOLUTE, "EXPOSURE_ABSOLUTE" },
+    { V4L2_CID_EXPOSURE_AUTO_PRIORITY, "EXPOSURE_AUTO_PRIORITY" },
+    { V4L2_CID_PAN_RELATIVE, "PAN_RELATIVE" },
+    { V4L2_CID_TILT_RELATIVE, "TILT_RELATIVE" },
+    { V4L2_CID_PAN_RESET, "PAN_RESET" },
+    { V4L2_CID_TILT_RESET, "TILT_RESET" },
+    { V4L2_CID_PAN_ABSOLUTE, "PAN_ABSOLUTE" },
+    { V4L2_CID_TILT_ABSOLUTE, "TILT_ABSOLUTE" },
+    { V4L2_CID_FOCUS_ABSOLUTE, "FOCUS_ABSOLUTE" },
+    { V4L2_CID_FOCUS_RELATIVE, "FOCUS_RELATIVE" },
+    { V4L2_CID_FOCUS_AUTO, "FOCUS_AUTO" },
+    { V4L2_CID_ZOOM_ABSOLUTE, "ZOOM_ABSOLUTE" },
+    { V4L2_CID_ZOOM_RELATIVE, "ZOOM_RELATIVE" },
+    { V4L2_CID_ZOOM_CONTINUOUS, "ZOOM_CONTINUOUS" },
+    { V4L2_CID_PRIVACY, "PRIVACY" },
+    { V4L2_CID_IRIS_ABSOLUTE, "IRIS_ABSOLUTE" },
+    { V4L2_CID_IRIS_RELATIVE, "IRIS_RELATIVE" },
+    { V4L2_CID_AUTO_EXPOSURE_BIAS, "AUTO_EXPOSURE_BIAS" },
+    { V4L2_CID_AUTO_N_PRESET_WHITE_BALANCE, "AUTO_N_PRESET_WHITE_BALANCE" },
+    { V4L2_CID_WIDE_DYNAMIC_RANGE, "WIDE_DYNAMIC_RANGE" },
+    { V4L2_CID_IMAGE_STABILIZATION, "IMAGE_STABILIZATION" },
+    { V4L2_CID_ISO_SENSITIVITY, "ISO_SENSITIVITY" },
+    { V4L2_CID_ISO_SENSITIVITY_AUTO, "ISO_SENSITIVITY_AUTO" },
+    { V4L2_CID_EXPOSURE_METERING, "EXPOSURE_METERING" },
+    { V4L2_CID_SCENE_MODE, "SCENE_MODE" },
+    { V4L2_CID_3A_LOCK, "3A_LOCK" },
+    { V4L2_CID_AUTO_FOCUS_START, "AUTO_FOCUS_START" },
+    { V4L2_CID_AUTO_FOCUS_STOP, "AUTO_FOCUS_STOP" },
+    { V4L2_CID_AUTO_FOCUS_STATUS, "AUTO_FOCUS_STATUS" },
+    { V4L2_CID_AUTO_FOCUS_RANGE, "AUTO_FOCUS_RANGE" },
+    { V4L2_CID_PAN_SPEED, "PAN_SPEED" },
+    { V4L2_CID_TILT_SPEED, "TILT_SPEED" },
+    // { V4L2_CID_CAMERA_ORIENTATION, "CAMERA_ORIENTATION" },
+    // { V4L2_CID_CAMERA_SENSOR_ROTATION, "CAMERA_SENSOR_ROTATION" },
+    { V4L2_CID_FLASH_LED_MODE, "FLASH_LED_MODE" },
+    { V4L2_CID_FLASH_STROBE_SOURCE, "FLASH_STROBE_SOURCE" },
+    { V4L2_CID_FLASH_STROBE, "FLASH_STROBE" },
+    { V4L2_CID_FLASH_STROBE_STOP, "FLASH_STROBE_STOP" },
+    { V4L2_CID_FLASH_STROBE_STATUS, "FLASH_STROBE_STATUS" },
+    { V4L2_CID_FLASH_TIMEOUT, "FLASH_TIMEOUT" },
+    { V4L2_CID_FLASH_INTENSITY, "FLASH_INTENSITY" },
+    { V4L2_CID_FLASH_TORCH_INTENSITY, "FLASH_TORCH_INTENSITY" },
+    { V4L2_CID_FLASH_INDICATOR_INTENSITY, "FLASH_INDICATOR_INTENSITY" },
+    { V4L2_CID_FLASH_FAULT, "FLASH_FAULT" },
+    { V4L2_CID_FLASH_CHARGE, "FLASH_CHARGE" },
+    { V4L2_CID_FLASH_READY, "FLASH_READY" },
+};
+
+const char *mp_control_id_to_str(uint32_t id)
+{
+    size_t size = sizeof(control_id_names) / sizeof(*control_id_names);
+
+    for (size_t i = 0; i < size; ++i) {
+        if (control_id_names[i].value == id) {
+            return control_id_names[i].str;
+        }
+    }
+
+    return "UNKNOWN";
+}
+
+struct int_str_pair control_type_names[] = {
+    { V4L2_CTRL_TYPE_INTEGER, "INTEGER" },
+    { V4L2_CTRL_TYPE_BOOLEAN, "BOOLEAN" },
+    { V4L2_CTRL_TYPE_MENU, "MENU" },
+    { V4L2_CTRL_TYPE_INTEGER_MENU, "INTEGER_MENU" },
+    { V4L2_CTRL_TYPE_BITMASK, "BITMASK" },
+    { V4L2_CTRL_TYPE_BUTTON, "BUTTON" },
+    { V4L2_CTRL_TYPE_INTEGER64, "INTEGER64" },
+    { V4L2_CTRL_TYPE_STRING, "STRING" },
+    { V4L2_CTRL_TYPE_CTRL_CLASS, "CTRL_CLASS" },
+    { V4L2_CTRL_TYPE_U8, "U8" },
+    { V4L2_CTRL_TYPE_U16, "U16" },
+    { V4L2_CTRL_TYPE_U32, "U32" },
+    // { V4L2_CTRL_TYPE_MPEG2_SLICE_PARAMS, "MPEG2_SLICE_PARAMS" },
+    // { V4L2_CTRL_TYPE_MPEG2_QUANTIZATION, "MPEG2_QUANTIZATION" },
+    // { V4L2_CTRL_TYPE_AREA, "AREA" },
+    // { V4L2_CTRL_TYPE_H264_SPS, "H264_SPS" },
+    // { V4L2_CTRL_TYPE_H264_PPS, "H264_PPS" },
+    // { V4L2_CTRL_TYPE_H264_SCALING_MATRIX, "H264_SCALING_MATRIX" },
+    // { V4L2_CTRL_TYPE_H264_SLICE_PARAMS, "H264_SLICE_PARAMS" },
+    // { V4L2_CTRL_TYPE_H264_DECODE_PARAMS, "H264_DECODE_PARAMS" },
+    // { V4L2_CTRL_TYPE_HEVC_SPS, "HEVC_SPS" },
+    // { V4L2_CTRL_TYPE_HEVC_PPS, "HEVC_PPS" },
+    // { V4L2_CTRL_TYPE_HEVC_SLICE_PARAMS, "HEVC_SLICE_PARAMS" },
+};
+
+const char *mp_control_type_to_str(uint32_t type)
+{
+    size_t size = sizeof(control_type_names) / sizeof(*control_type_names);
+
+    for (size_t i = 0; i < size; ++i) {
+        if (control_type_names[i].value == type) {
+            return control_type_names[i].str;
+        }
+    }
+
+    return "UNKNOWN";
+}
+
+struct _MPControlList {
+    MPControl control;
+    MPControlList *next;
+};
+
+static int control_fd(MPCamera *camera)
+{
+    if (camera->subdev_fd != -1) {
+        return camera->subdev_fd;
+    }
+    return camera->video_fd;
+}
+
+MPControlList *mp_camera_list_controls(MPCamera *camera)
+{
+    MPControlList *item = NULL;
+
+    struct v4l2_query_ext_ctrl ctrl = {};
+    ctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
+    while (true) {
+        if (xioctl(control_fd(camera), VIDIOC_QUERY_EXT_CTRL, &ctrl) == -1) {
+            if (errno != EINVAL) {
+                errno_printerr("VIDIOC_QUERY_EXT_CTRL");
+            }
+            break;
+        }
+
+        MPControl control = {
+            .id = ctrl.id,
+            .type = ctrl.type,
+            .name = {},
+            .min = ctrl.minimum,
+            .max = ctrl.maximum,
+            .step = ctrl.step,
+            .default_value = ctrl.default_value,
+            .flags = ctrl.flags,
+            .element_size = ctrl.elem_size,
+            .element_count = ctrl.elems,
+            .dimensions_count = ctrl.nr_of_dims,
+            .dimensions = {},
+        };
+
+        strcpy(control.name, ctrl.name);
+        memcpy(control.dimensions, ctrl.dims, sizeof(uint32_t) * V4L2_CTRL_MAX_DIMS);
+
+        MPControlList *new_item = malloc(sizeof(MPControlList));
+        new_item->control = control;
+        new_item->next = item;
+        item = new_item;
+
+        ctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
+    }
+
+    return item;
+}
+
+MPControl *mp_control_list_get(MPControlList *list)
+{
+    g_return_val_if_fail(list, NULL);
+    return &list->control;
+}
+
+MPControlList *mp_control_list_next(MPControlList *list)
+{
+    g_return_val_if_fail(list, NULL);
+    return list->next;
+}
+
+void mp_control_list_free(MPControlList *list)
+{
+    while (list) {
+        MPControlList *tmp = list;
+        list = tmp->next;
+        free(tmp);
+    }
+}
+
+bool mp_camera_query_control(MPCamera *camera, uint32_t id, MPControl *control)
+{
+    struct v4l2_query_ext_ctrl ctrl = {};
+    ctrl.id = id;
+    if (xioctl(control_fd(camera), VIDIOC_QUERY_EXT_CTRL, &ctrl) == -1) {
+        errno_printerr("VIDIOC_QUERY_EXT_CTRL");
+        return false;
+    }
+
+    if (control) {
+        control->id = ctrl.id;
+        control->type = ctrl.type;
+        strcpy(control->name, ctrl.name);
+        control->min = ctrl.minimum;
+        control->max = ctrl.maximum;
+        control->step = ctrl.step;
+        control->default_value = ctrl.default_value;
+        control->flags = ctrl.flags;
+        control->element_size = ctrl.elem_size;
+        control->element_count = ctrl.elems;
+        control->dimensions_count = ctrl.nr_of_dims;
+        memcpy(control->dimensions, ctrl.dims, sizeof(uint32_t) * V4L2_CTRL_MAX_DIMS);
+    }
+    return true;
+}
+
+static bool control_impl_int32(MPCamera *camera, uint32_t id, int request, int32_t *value)
+{
+    struct v4l2_ext_control ctrl = {};
+    ctrl.id = id;
+    ctrl.value = *value;
+
+    struct v4l2_ext_controls ctrls = {
+        .ctrl_class = 0,
+        .which = V4L2_CTRL_WHICH_CUR_VAL,
+        .count = 1,
+        .controls = &ctrl,
+    };
+    if (xioctl(control_fd(camera), request, &ctrls) == -1) {
+        return false;
+    }
+
+    *value = ctrl.value;
+    return true;
+}
+
+bool mp_camera_control_try_int32(MPCamera *camera, uint32_t id, int32_t *v)
+{
+    return control_impl_int32(camera, id, VIDIOC_TRY_EXT_CTRLS, v);
+}
+
+bool mp_camera_control_set_int32(MPCamera *camera, uint32_t id, int32_t v)
+{
+    return control_impl_int32(camera, id, VIDIOC_S_EXT_CTRLS, &v);
+}
+
+int32_t mp_camera_control_get_int32(MPCamera *camera, uint32_t id)
+{
+    int32_t v = 0;
+    control_impl_int32(camera, id, VIDIOC_G_EXT_CTRLS, &v);
+    return v;
+}
+
+bool mp_camera_control_try_boolean(MPCamera *camera, uint32_t id, bool *v)
+{
+    int32_t value = *v;
+    bool s = control_impl_int32(camera, id, VIDIOC_TRY_EXT_CTRLS, &value);
+    *v = value;
+    return s;
+}
+
+bool mp_camera_control_set_bool(MPCamera *camera, uint32_t id, bool v)
+{
+    int32_t value = v;
+    return control_impl_int32(camera, id, VIDIOC_S_EXT_CTRLS, &value);
+}
+
+bool mp_camera_control_get_bool(MPCamera *camera, uint32_t id)
+{
+    int32_t v = false;
+    control_impl_int32(camera, id, VIDIOC_G_EXT_CTRLS, &v);
+    return v;
+}
