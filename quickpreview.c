@@ -51,6 +51,14 @@ static inline uint32_t apply_colormatrix(uint32_t color, const float *colormatri
 	uint32_t r = (color >> 16) * colormatrix[0] + ((color >> 8) & 0xFF) * colormatrix[1] + (color & 0xFF) * colormatrix[2];
 	uint32_t g = (color >> 16) * colormatrix[3] + ((color >> 8) & 0xFF) * colormatrix[4] + (color & 0xFF) * colormatrix[5];
 	uint32_t b = (color >> 16) * colormatrix[6] + ((color >> 8) & 0xFF) * colormatrix[7] + (color & 0xFF) * colormatrix[8];
+
+	// Clip colors
+	if (r > 0xFF)
+		r = 0xFF;
+	if (g > 0xFF)
+		g = 0xFF;
+	if (b > 0xFF)
+		b = 0xFF;
 	return pack_rgb(r, g, b);
 }
 
@@ -126,7 +134,6 @@ static void quick_preview_rggb8(
 
 			color = apply_colormatrix(color, colormatrix);
 
-			// printf("?? %d:%d\n", dst_x, dst_y);
 			dst[coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored)] = color;
 
 			src_x += 2 + 2 * skip;
@@ -219,6 +226,11 @@ static void quick_preview_yuv(
 
 	uint32_t width_bytes = src_width * 2;
 
+	uint32_t unrot_dst_width = dst_width;
+	if (rotation != 0 && rotation != 180) {
+		unrot_dst_width = dst_height;
+	}
+
 	uint32_t src_y = 0, dst_y = 0;
 	while (src_y < src_height) {
 		uint32_t src_x = 0, dst_x = 0;
@@ -251,9 +263,12 @@ static void quick_preview_yuv(
 			dst[dst_i1] = color1;
 			++dst_x;
 
-			uint32_t dst_i2 = coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored);
-			dst[dst_i2] = color2;
-			++dst_x;
+			// The last pixel needs to be skipped if we have an odd un-rotated width
+			if (dst_x < unrot_dst_width) {
+				uint32_t dst_i2 = coord_map(dst_x, dst_y, dst_width, dst_height, rotation, mirrored);
+				dst[dst_i2] = color2;
+				++dst_x;
+			}
 
 			src_x += 4 + 4 * skip;
 		}
