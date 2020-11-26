@@ -131,7 +131,8 @@ int main(int argc, char *argv[])
         MPCameraMode *m = mp_camera_mode_list_get(mode);
         printf("  %dx%d interval:%d/%d fmt:%s\n", m->width, m->height, m->frame_interval.numerator, m->frame_interval.denominator, mp_pixel_format_to_str(m->pixel_format));
 
-        if (m->frame_interval.denominator < 15 || m->frame_interval.denominator > 30) {
+        // Skip really slow framerates
+        if (m->frame_interval.denominator < 15) {
             printf("    Skipping…\n");
             continue;
         }

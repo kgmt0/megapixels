@@ -46,52 +46,6 @@ static int exposure;
 
 static char capture_fname[255];
 
-// static void
-// process_image(const int *p, int size)
-// {
-//     time_t rawtime;
-//     char datetime[20] = {0};
-//     struct tm tim;
-//     uint8_t *pixels;
-//     char fname[255];
-//     char fname_target[255];
-//     char command[1024];
-//     char timestamp[30];
-//     char uniquecameramodel[255];
-//     GdkPixbuf *pixbuf;
-//     GdkPixbuf *pixbufrot;
-//     GdkPixbuf *thumb;
-//     GError *error = NULL;
-//     double scale;
-//     cairo_t *cr;
-//     TIFF *tif;
-//     int skip = 2;
-//     long sub_offset = 0;
-//     uint64 exif_offset = 0;
-//     static const short cfapatterndim[] = {2, 2};
-//     static const float neutral[] = {1.0, 1.0, 1.0};
-//     static uint16_t isospeed[] = {0};
-
-//     // Only process preview frames when not capturing
-//     if (capture == 0) {
-
-//     } else {
-
-
-//         if (capture == 0) {
-
-
-//             // Restore the auto exposure and gain if needed
-//             // if (auto_exposure) {
-//             //     v4l2_ctrl_set(current.fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
-//             // }
-//             // if (auto_gain) {
-//             //     v4l2_ctrl_set(current.fd, V4L2_CID_AUTOGAIN, 1);
-//             // }
-//         }
-//     }
-// }
-
 static void
 register_custom_tiff_tags(TIFF *tif)
 {

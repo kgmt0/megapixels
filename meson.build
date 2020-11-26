@@ -45,8 +45,9 @@ install_data(['postprocess.sh'],
   install_dir : get_option('datadir') / 'megapixels/',
   install_mode: 'rwxr-xr-x')
 
+# Tools
 executable('list_devices', 'tools/list_devices.c', 'device.c', dependencies: [gtkdep])
-executable('test_camera', 'tools/test_camera.c', 'camera.c', 'device.c', dependencies: [gtkdep])
+executable('camera_test', 'tools/camera_test.c', 'camera.c', 'device.c', dependencies: [gtkdep])
 
 test_quickpreview = executable('test_quickpreview', 'tests/test_quickpreview.c', 'quickpreview.c', 'camera.c', dependencies: [gtkdep])
 test('quickpreview', test_quickpreview)
