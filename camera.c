@@ -174,6 +174,20 @@ bool mp_camera_mode_is_equivalent(const MPCameraMode *m1, const MPCameraMode *m2
         && m1->height == m2->height;
 }
 
+static void errno_printerr(const char *s)
+{
+    g_printerr("MPCamera: %s error %d, %s\n", s, errno, strerror(errno));
+}
+
+static int xioctl(int fd, int request, void *arg)
+{
+    int r;
+    do {
+        r = ioctl(fd, request, arg);
+    } while (r == -1 && errno == EINTR);
+    return r;
+}
+
 struct video_buffer {
     uint32_t length;
     uint8_t *data;
@@ -188,17 +202,37 @@ struct _MPCamera {
 
     struct video_buffer buffers[MAX_VIDEO_BUFFERS];
     uint32_t num_buffers;
+
+    bool use_mplane;
 };
 
 MPCamera *mp_camera_new(int video_fd, int subdev_fd)
 {
     g_return_val_if_fail(video_fd != -1, NULL);
 
+    // Query capabilities
+    struct v4l2_capability cap;
+    if (xioctl(video_fd, VIDIOC_QUERYCAP, &cap) == -1) {
+        return NULL;
+    }
+
+    // Check whether this is a video capture device
+    bool use_mplane;
+    if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
+        use_mplane = true;
+        printf("!!\n");
+    } else if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) {
+        use_mplane = false;
+    } else {
+        return NULL;
+    }
+
     MPCamera *camera = malloc(sizeof(MPCamera));
     camera->video_fd = video_fd;
     camera->subdev_fd = subdev_fd;
     camera->has_set_mode = false;
     camera->num_buffers = 0;
+    camera->use_mplane = use_mplane;
     return camera;
 }
 
@@ -227,37 +261,49 @@ int mp_camera_get_subdev_fd(MPCamera *camera)
     return camera->subdev_fd;
 }
 
-static void errno_printerr(const char *s)
+static bool camera_mode_impl(MPCamera *camera, int request, MPCameraMode *mode)
 {
-    g_printerr("MPCamera: %s error %d, %s\n", s, errno, strerror(errno));
-}
+    uint32_t pixfmt = mp_pixel_format_from_v4l_pixel_format(mode->pixel_format);
+    struct v4l2_format fmt = {};
+    if (camera->use_mplane) {
+        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        fmt.fmt.pix_mp.width = mode->width;
+        fmt.fmt.pix_mp.height = mode->height;
+        fmt.fmt.pix_mp.pixelformat = pixfmt;
+        fmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+    } else {
+        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        fmt.fmt.pix.width = mode->width;
+        fmt.fmt.pix.height = mode->height;
+        fmt.fmt.pix.pixelformat = pixfmt;
+        fmt.fmt.pix.field = V4L2_FIELD_ANY;
+    }
 
-static int xioctl(int fd, int request, void *arg)
-{
-    int r;
-    do {
-        r = ioctl(fd, request, arg);
-    } while (r == -1 && errno == EINTR);
-    return r;
+    if (xioctl(camera->video_fd, request, &fmt) == -1) {
+        return false;
+    }
+
+    if (camera->use_mplane) {
+        mode->width = fmt.fmt.pix_mp.width;
+        mode->height = fmt.fmt.pix_mp.height;
+        mode->pixel_format = mp_pixel_format_from_v4l_pixel_format(
+            fmt.fmt.pix_mp.pixelformat);
+    } else {
+        mode->width = fmt.fmt.pix.width;
+        mode->height = fmt.fmt.pix.height;
+        mode->pixel_format = mp_pixel_format_from_v4l_pixel_format(
+            fmt.fmt.pix.pixelformat);
+    }
+
+    return true;
 }
 
 bool mp_camera_try_mode(MPCamera *camera, MPCameraMode *mode)
 {
-    struct v4l2_format fmt = {};
-    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    fmt.fmt.pix.width = mode->width;
-    fmt.fmt.pix.height = mode->height;
-    fmt.fmt.pix.pixelformat = mp_pixel_format_from_v4l_pixel_format(mode->pixel_format);
-    fmt.fmt.pix.field = V4L2_FIELD_ANY;
-    if (xioctl(camera->video_fd, VIDIOC_TRY_FMT, &fmt) == -1) {
+    if (!camera_mode_impl(camera, VIDIOC_TRY_FMT, mode)) {
         errno_printerr("VIDIOC_S_FMT");
         return false;
     }
-
-    mode->width = fmt.fmt.pix.width;
-    mode->height = fmt.fmt.pix.height;
-    mode->pixel_format = mp_pixel_format_from_v4l_pixel_format(fmt.fmt.pix.pixelformat);
-
     return true;
 }
 
@@ -317,21 +363,10 @@ bool mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode)
 
     // Set the mode for the video device
     {
-        struct v4l2_format fmt = {};
-        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.width = mode->width;
-        fmt.fmt.pix.height = mode->height;
-        fmt.fmt.pix.pixelformat = mp_pixel_format_to_v4l_pixel_format(mode->pixel_format);
-        fmt.fmt.pix.field = V4L2_FIELD_ANY;
-        if (xioctl(camera->video_fd, VIDIOC_S_FMT, &fmt) == -1) {
+        if (!camera_mode_impl(camera, VIDIOC_S_FMT, mode)) {
             errno_printerr("VIDIOC_S_FMT");
             return false;
         }
-
-        // Update the mode
-        mode->pixel_format = mp_pixel_format_from_v4l_pixel_format(fmt.fmt.pix.pixelformat);
-        mode->width = fmt.fmt.pix.width;
-        mode->height = fmt.fmt.pix.height;
     }
 
     camera->has_set_mode = true;
@@ -370,19 +405,36 @@ bool mp_camera_start_capture(MPCamera *camera)
             .index = i,
         };
 
+        struct v4l2_plane planes[1];
+        if (camera->use_mplane) {
+            buf.m.planes = planes;
+            buf.length = 1;
+        }
+
         if (xioctl(camera->video_fd, VIDIOC_QUERYBUF, &buf) == -1) {
             errno_printerr("VIDIOC_QUERYBUF");
             break;
         }
 
-        camera->buffers[i].length = buf.length;
-        camera->buffers[i].data = mmap(
-            NULL,
-            buf.length,
-            PROT_READ,
-            MAP_SHARED,
-            camera->video_fd,
-            buf.m.offset);
+        if (camera->use_mplane) {
+            camera->buffers[i].length = planes[0].length;
+            camera->buffers[i].data = mmap(
+                NULL,
+                planes[0].length,
+                PROT_READ,
+                MAP_SHARED,
+                camera->video_fd,
+                planes[0].m.mem_offset);
+        } else {
+            camera->buffers[i].length = buf.length;
+            camera->buffers[i].data = mmap(
+                NULL,
+                buf.length,
+                PROT_READ,
+                MAP_SHARED,
+                camera->video_fd,
+                buf.m.offset);
+        }
 
         if (camera->buffers[i].data == MAP_FAILED) {
             errno_printerr("mmap");
@@ -403,6 +455,12 @@ bool mp_camera_start_capture(MPCamera *camera)
             .memory = V4L2_MEMORY_MMAP,
             .index = i,
         };
+
+        struct v4l2_plane planes[1];
+        if (camera->use_mplane) {
+            buf.m.planes = planes;
+            buf.length = 1;
+        }
 
         // Queue the buffer for capture
         if (xioctl(camera->video_fd, VIDIOC_QBUF, &buf) == -1) {
@@ -483,6 +541,13 @@ bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *)
     struct v4l2_buffer buf = {};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
+
+    struct v4l2_plane planes[1];
+    if (camera->use_mplane) {
+        buf.m.planes = planes;
+        buf.length = 1;
+    }
+
     if (xioctl(camera->video_fd, VIDIOC_DQBUF, &buf) == -1) {
         switch (errno) {
             case EAGAIN:
@@ -500,8 +565,15 @@ bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *)
     uint32_t width = camera->current_mode.width;
     uint32_t height = camera->current_mode.height;
 
-    assert(buf.bytesused == mp_pixel_format_width_to_bytes(pixel_format, width) * height);
-    assert(buf.bytesused == camera->buffers[buf.index].length);
+    uint32_t bytesused;
+    if (camera->use_mplane) {
+        bytesused = planes[0].bytesused;
+    } else {
+        bytesused = buf.bytesused;
+    }
+
+    assert(bytesused == mp_pixel_format_width_to_bytes(pixel_format, width) * height);
+    assert(bytesused == camera->buffers[buf.index].length);
 
     MPImage image = {
         .pixel_format = pixel_format,
