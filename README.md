@@ -41,10 +41,8 @@ These are the sections describing the sensors.
 
 * `driver=ov5640` the name of the media node that provides the sensor and it's /dev/v4l-subdev* node.
 * `media-driver=sun6i-csi` the name of the media node that has this camera in it.
-* `width=640` and `height=480` the resolution to use for the sensor
-* `rate=15` the refresh rate in fps to use for the sensor
-* `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor, only BGGR8 is fully supported
 * `rotate=90` the rotation angle to make the sensor match the screen
+* `mirrored=true` whether the output is mirrored, useful for front-facing cameras
 * `colormatrix=` the DNG colormatrix1 attribute as 9 comma seperated floats
 * `forwardmatrix=` the DNG forwardmatrix1 attribute as 9 comma seperated floats
 * `blacklevel=10` The DNG blacklevel attribute for this camera
@@ -52,6 +50,14 @@ These are the sections describing the sensors.
 * `focallength=3.33` The focal length of the camera, for EXIF
 * `cropfactor=10.81` The cropfactor for the sensor in the camera, for EXIF
 * `fnumber=3.0` The aperture size of the sensor, for EXIF
+
+These sections have two possibly prefixes: `capture-` and `preview-`. Both sets
+are required. Capture is used when a picture is taken, whereas preview is used
+when previewing.
+
+* `width=640` and `height=480` the resolution to use for the sensor
+* `rate=15` the refresh rate in fps to use for the sensor
+* `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor, only BGGR8 is fully supported
 
 # Post processing
 
@@ -93,11 +99,30 @@ To send patches, follow this procedure:
 
 ## Source code organization
 
-There are 3 ".c" files:
-
 * `ini.c` contains a INI file format parser.
-* `quickdebayer.c` implements a fast debayer function.
-* `main.c` contains the entry point and everything else.
+* `camera_config.c` describes how cameras are configured. Contains no state.
+* `main.c` contains the entry point and UI portion of the application.
+* `quickpreview.c` implements fast preview functionality, including debayering, color correction, rotation, etc.
+* `io_pipeline.c` implements all IO interaction with V4L2 devices in a separate thread to prevent blocking.
+* `process_pipeline.c` implements all process done on captured images, including launching post-processing
+* `pipeline.c` Generic threaded message passing implementation based on glib, used to implement the pipelines.
+* `camera.c` V4L2 abstraction layer to make working with cameras easier
+* `device.c` V4L2 abstraction layer for devices
+
+The primary image pipeline consists of the main application, the IO pipeline and
+the process pipeline. The main application sends commands to the IO pipeline,
+which in turn talks to the process pipeline, which then talks to the main
+application. This way neither IO nor processing blocks the main application and
+races are generally avoided.
+
+Tests are located in `tests/`.
+
+## Tools
+
+All tools are contained in `tools/`
+
+* `list_devices` lists all V4L2 devices and their hardware layout
+* `camera_test` lists controls and video modes of a specific camera and tests capturing data from it
 
 ## Linux video subsystem 
 
