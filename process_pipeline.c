@@ -368,7 +368,7 @@ static void capture()
 
     if (tempdir == NULL) {
         g_printerr("Could not make capture directory %s\n", template);
-        exit (EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 
     strcpy(burst_dir, tempdir);

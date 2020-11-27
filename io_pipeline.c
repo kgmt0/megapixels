@@ -93,87 +93,6 @@ static bool want_focus = false;
 static MPPipeline *pipeline;
 static GSource *capture_source;
 
-static int
-xioctl(int fd, int request, void *arg)
-{
-    int c = 0;
-    int r;
-    do {
-        r = ioctl(fd, request, arg);
-        ++c;
-        if (c > 1)
-            printf("ioctl retry %d\n", c);
-    } while (r == -1 && errno == EINTR);
-    return r;
-}
-
-static int
-v4l2_ctrl_set(int fd, uint32_t id, int val)
-{
-   struct v4l2_control ctrl = {0};
-   ctrl.id = id;
-   ctrl.value = val;
-
-   if (xioctl(fd, VIDIOC_S_CTRL, &ctrl) == -1) {
-       g_printerr("Failed to set control %d to %d\n", id, val);
-       return -1;
-   }
-   return 0;
-}
-
-static int
-v4l2_ctrl_get(int fd, uint32_t id)
-{
-   struct v4l2_control ctrl = {0};
-   ctrl.id = id;
-
-   if (xioctl(fd, VIDIOC_G_CTRL, &ctrl) == -1) {
-       g_printerr("Failed to get control %d\n", id);
-       return -1;
-   }
-   return ctrl.value;
-}
-
-static int
-v4l2_ctrl_get_max(int fd, uint32_t id)
-{
-   struct v4l2_queryctrl queryctrl;
-   int ret;
-
-   memset(&queryctrl, 0, sizeof(queryctrl));
-
-   queryctrl.id = id;
-   ret = xioctl(fd, VIDIOC_QUERYCTRL, &queryctrl);
-   if (ret)
-       return 0;
-
-   if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED) {
-       return 0;
-   }
-
-   return queryctrl.maximum;
-}
-
-static int
-v4l2_has_control(int fd, int control_id)
-{
-   struct v4l2_queryctrl queryctrl;
-   int ret;
-
-   memset(&queryctrl, 0, sizeof(queryctrl));
-
-   queryctrl.id = control_id;
-   ret = xioctl(fd, VIDIOC_QUERYCTRL, &queryctrl);
-   if (ret)
-       return 0;
-
-   if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED) {
-       return 0;
-   }
-
-   return 1;
-}
-
 static void setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 {
     // Find device info
@@ -261,22 +180,22 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
         info->camera = mp_camera_new(dev_info->video_fd, info->fd);
 
         // Trigger continuous auto focus if the sensor supports it
-        if (v4l2_has_control(info->fd, V4L2_CID_FOCUS_AUTO)) {
+        if (mp_camera_query_control(info->camera, V4L2_CID_FOCUS_AUTO, NULL)) {
             info->has_auto_focus_continuous = true;
-            v4l2_ctrl_set(info->fd, V4L2_CID_FOCUS_AUTO, 1);
+            mp_camera_control_set_bool(info->camera, V4L2_CID_FOCUS_AUTO, true);
         }
-        if (v4l2_has_control(info->fd, V4L2_CID_AUTO_FOCUS_START)) {
+        if (mp_camera_query_control(info->camera, V4L2_CID_AUTO_FOCUS_START, NULL)) {
             info->has_auto_focus_start = true;
         }
 
-        if (v4l2_has_control(info->fd, V4L2_CID_GAIN)) {
+        MPControl control;
+        if (mp_camera_query_control(info->camera, V4L2_CID_GAIN, &control)) {
             info->gain_ctrl = V4L2_CID_GAIN;
-            info->gain_max = v4l2_ctrl_get_max(info->fd, V4L2_CID_GAIN);
+            info->gain_max = control.max;
         }
-
-        if (v4l2_has_control(info->fd, V4L2_CID_ANALOGUE_GAIN)) {
+        else if (mp_camera_query_control(info->camera, V4L2_CID_ANALOGUE_GAIN, &control)) {
             info->gain_ctrl = V4L2_CID_ANALOGUE_GAIN;
-            info->gain_max = v4l2_ctrl_get_max(info->fd, V4L2_CID_ANALOGUE_GAIN);
+            info->gain_max = control.max;
         }
     }
 }
@@ -324,10 +243,10 @@ update_process_pipeline()
 
     // Grab the latest control values
     if (!current_controls.gain_is_manual) {
-        current_controls.gain = v4l2_ctrl_get(info->fd, info->gain_ctrl);
+        current_controls.gain = mp_camera_control_get_int32(info->camera, info->gain_ctrl);
     }
     if (!current_controls.exposure_is_manual) {
-        current_controls.exposure = v4l2_ctrl_get(info->fd, V4L2_CID_EXPOSURE);
+        current_controls.exposure = mp_camera_control_get_int32(info->camera, V4L2_CID_EXPOSURE);
     }
 
     struct mp_process_pipeline_state pipeline_state = {
@@ -366,8 +285,8 @@ capture(MPPipeline *pipeline, const void *data)
     captures_remaining = burst_length;
 
     // Disable the autogain/exposure while taking the burst
-    v4l2_ctrl_set(info->fd, V4L2_CID_AUTOGAIN, 0);
-    v4l2_ctrl_set(info->fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+    mp_camera_control_set_int32(info->camera, V4L2_CID_AUTOGAIN, 0);
+    mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
 
     // Change camera mode for capturing
     mp_camera_stop_capture(info->camera);
@@ -400,31 +319,31 @@ update_controls()
 
     if (want_focus) {
         if (info->has_auto_focus_continuous) {
-            v4l2_ctrl_set(info->fd, V4L2_CID_FOCUS_AUTO, 1);
+            mp_camera_control_set_bool(info->camera, V4L2_CID_FOCUS_AUTO, 1);
         } else if (info->has_auto_focus_start) {
-            v4l2_ctrl_set(info->fd, V4L2_CID_AUTO_FOCUS_START, 1);
+            mp_camera_control_set_bool(info->camera, V4L2_CID_AUTO_FOCUS_START, 1);
         }
 
         want_focus = false;
     }
 
     if (current_controls.gain_is_manual != desired_controls.gain_is_manual) {
-        v4l2_ctrl_set(info->fd, V4L2_CID_AUTOGAIN, desired_controls.gain_is_manual ? 0 : 1);
+        mp_camera_control_set_bool(info->camera, V4L2_CID_AUTOGAIN, !desired_controls.gain_is_manual);
     }
 
     if (!desired_controls.gain_is_manual && current_controls.gain != desired_controls.gain) {
-        v4l2_ctrl_set(info->fd, info->gain_ctrl, desired_controls.gain);
+        mp_camera_control_set_int32(info->camera, info->gain_ctrl, desired_controls.gain);
     }
 
     if (current_controls.exposure_is_manual != desired_controls.exposure_is_manual) {
-        v4l2_ctrl_set(
-            info->fd,
+        mp_camera_control_set_int32(
+            info->camera,
             V4L2_CID_EXPOSURE_AUTO,
             desired_controls.exposure_is_manual ? V4L2_EXPOSURE_MANUAL : V4L2_EXPOSURE_AUTO);
     }
 
     if (!desired_controls.exposure_is_manual && current_controls.exposure != desired_controls.exposure) {
-        v4l2_ctrl_set(info->fd, V4L2_CID_EXPOSURE, desired_controls.exposure);
+        mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE, desired_controls.exposure);
     }
 
     current_controls = desired_controls;
@@ -481,11 +400,11 @@ on_frame(MPImage image, void *data)
 
             // Restore the auto exposure and gain if needed
             if (!current_controls.exposure_is_manual) {
-                v4l2_ctrl_set(info->fd, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
+                mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_AUTO);
             }
 
             if (!current_controls.gain_is_manual) {
-                v4l2_ctrl_set(info->fd, V4L2_CID_AUTOGAIN, 1);
+                mp_camera_control_set_bool(info->camera, V4L2_CID_AUTOGAIN, true);
             }
 
             // Go back to preview mode
@@ -547,11 +466,11 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
             mp_camera_start_capture(info->camera);
             capture_source = mp_pipeline_add_capture_source(pipeline, info->camera, on_frame, NULL);
 
-            current_controls.gain_is_manual = v4l2_ctrl_get(info->fd, V4L2_CID_EXPOSURE_AUTO) == V4L2_EXPOSURE_MANUAL;
-            current_controls.gain = v4l2_ctrl_get(info->fd, info->gain_ctrl);
+            current_controls.gain_is_manual = mp_camera_control_get_int32(info->camera, V4L2_CID_EXPOSURE_AUTO) == V4L2_EXPOSURE_MANUAL;
+            current_controls.gain = mp_camera_control_get_int32(info->camera, info->gain_ctrl);
 
-            current_controls.exposure_is_manual = v4l2_ctrl_get(info->fd, V4L2_CID_AUTOGAIN) == 0;
-            current_controls.exposure = v4l2_ctrl_get(info->fd, V4L2_CID_EXPOSURE);
+            current_controls.exposure_is_manual = mp_camera_control_get_bool(info->camera, V4L2_CID_AUTOGAIN) == 0;
+            current_controls.exposure = mp_camera_control_get_int32(info->camera, V4L2_CID_EXPOSURE);
         }
     }
 
