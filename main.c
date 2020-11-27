@@ -178,6 +178,8 @@ draw_surface_scaled_centered(
 static bool
 capture_completed(const char *fname)
 {
+	strncpy(last_path, fname, 260);
+
 	// Create a thumbnail from the current surface
 	cairo_surface_t *thumb = cairo_image_surface_create(
 		CAIRO_FORMAT_ARGB32,
@@ -326,13 +328,13 @@ preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 void
 on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 {
-	char uri[270];
+	char uri[275];
 	GError *error = NULL;
 
 	if(strlen(last_path) == 0) {
 		return;
 	}
-	sprintf(uri, "file://%s", last_path);
+	sprintf(uri, "file://%s.tiff", last_path);
 	if(!g_app_info_launch_default_for_uri(uri, NULL, &error)){
 		g_printerr("Could not launch image viewer: %s\n", error->message);
 	}
