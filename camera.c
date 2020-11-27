@@ -1053,7 +1053,9 @@ bool mp_camera_query_control(MPCamera *camera, uint32_t id, MPControl *control)
     struct v4l2_query_ext_ctrl ctrl = {};
     ctrl.id = id;
     if (xioctl(control_fd(camera), VIDIOC_QUERY_EXT_CTRL, &ctrl) == -1) {
-        errno_printerr("VIDIOC_QUERY_EXT_CTRL");
+        if (errno != EINVAL) {
+            errno_printerr("VIDIOC_QUERY_EXT_CTRL");
+        }
         return false;
     }
 
