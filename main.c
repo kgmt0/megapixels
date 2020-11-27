@@ -155,9 +155,42 @@ void mp_main_set_preview(cairo_surface_t *image)
 		NULL);
 }
 
+static void
+draw_surface_scaled_centered(
+	cairo_t *cr, uint32_t dst_width, uint32_t dst_height, cairo_surface_t *surface)
+{
+	cairo_save(cr);
+
+	cairo_translate(cr, dst_width / 2, dst_height / 2);
+
+	int width = cairo_image_surface_get_width(surface);
+	int height = cairo_image_surface_get_height(surface);
+	double scale = MIN(dst_width / (double) width, dst_height / (double) height);
+	cairo_scale(cr, scale, scale);
+
+	cairo_translate(cr, -width / 2, -height / 2);
+
+	cairo_set_source_surface(cr, surface, 0, 0);
+	cairo_paint(cr);
+	cairo_restore(cr);
+}
+
 static bool
 capture_completed(const char *fname)
 {
+	// Create a thumbnail from the current surface
+	cairo_surface_t *thumb = cairo_image_surface_create(
+		CAIRO_FORMAT_ARGB32,
+		24,
+		24);
+
+	cairo_t *cr = cairo_create(thumb);
+	draw_surface_scaled_centered(cr, 24, 24, surface);
+	cairo_destroy(cr);
+
+	gtk_image_set_from_surface(GTK_IMAGE(thumb_last), thumb);
+
+	cairo_surface_destroy(thumb);
 	return false;
 }
 
@@ -263,20 +296,7 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	}
 
 	if (surface) {
-		cairo_save(cr);
-
-		cairo_translate(cr, preview_width / 2, preview_height / 2);
-
-		int width = cairo_image_surface_get_width(surface);
-		int height = cairo_image_surface_get_height(surface);
-		double scale = MIN(preview_width / (double) width, preview_height / (double) height);
-		cairo_scale(cr, scale, scale);
-
-		cairo_translate(cr, -width / 2, -height / 2);
-
-		cairo_set_source_surface(cr, surface, 0, 0);
-		cairo_paint(cr);
-		cairo_restore(cr);
+		draw_surface_scaled_centered(cr, preview_width, preview_height, surface);
 	}
 
 	cairo_set_source_surface(cr, status_surface, 0, 0);
