@@ -331,7 +331,7 @@ update_controls()
         mp_camera_control_set_bool(info->camera, V4L2_CID_AUTOGAIN, !desired_controls.gain_is_manual);
     }
 
-    if (!desired_controls.gain_is_manual && current_controls.gain != desired_controls.gain) {
+    if (desired_controls.gain_is_manual && current_controls.gain != desired_controls.gain) {
         mp_camera_control_set_int32(info->camera, info->gain_ctrl, desired_controls.gain);
     }
 
@@ -342,7 +342,7 @@ update_controls()
             desired_controls.exposure_is_manual ? V4L2_EXPOSURE_MANUAL : V4L2_EXPOSURE_AUTO);
     }
 
-    if (!desired_controls.exposure_is_manual && current_controls.exposure != desired_controls.exposure) {
+    if (desired_controls.exposure_is_manual && current_controls.exposure != desired_controls.exposure) {
         mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE, desired_controls.exposure);
     }
 
