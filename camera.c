@@ -350,7 +350,6 @@ bool mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode)
             interval.interval = mode->frame_interval;
             if (xioctl(camera->subdev_fd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &interval) == -1) {
                 errno_printerr("VIDIOC_SUBDEV_S_FRAME_INTERVAL");
-                return false;
             }
         }
 
@@ -380,10 +379,15 @@ bool mp_camera_start_capture(MPCamera *camera)
     g_return_val_if_fail(camera->has_set_mode, false);
     g_return_val_if_fail(camera->num_buffers == 0, false);
 
+    enum v4l2_buf_type buftype = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (camera->use_mplane) {
+        buftype = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    }
+
     // Start by requesting buffers
     struct v4l2_requestbuffers req = {};
     req.count = MAX_VIDEO_BUFFERS;
-    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.type = buftype;
     req.memory = V4L2_MEMORY_MMAP;
 
     if (xioctl(camera->video_fd, VIDIOC_REQBUFS, &req) == -1) {
@@ -400,7 +404,7 @@ bool mp_camera_start_capture(MPCamera *camera)
     for (uint32_t i = 0; i < req.count; ++i) {
         // Query each buffer and mmap it
         struct v4l2_buffer buf = {
-            .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+            .type = buftype,
             .memory = V4L2_MEMORY_MMAP,
             .index = i,
         };
@@ -451,7 +455,7 @@ bool mp_camera_start_capture(MPCamera *camera)
 
     for (uint32_t i = 0; i < camera->num_buffers; ++i) {
         struct v4l2_buffer buf = {
-            .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+            .type = buftype,
             .memory = V4L2_MEMORY_MMAP,
             .index = i,
         };
