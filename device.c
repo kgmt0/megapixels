@@ -176,6 +176,17 @@ const struct media_v2_entity *mp_device_find_entity(const MPDevice *device, cons
     return NULL;
 }
 
+const struct media_v2_entity *mp_device_find_entity_type(const MPDevice *device, const uint32_t type)
+{
+    // Find the entity from the entity type
+    for (uint32_t i = 0; i < device->num_entities; ++i) {
+        if (device->entities[i].function == type) {
+            return &device->entities[i];
+        }
+    }
+    return NULL;
+}
+
 const struct media_device_info *mp_device_get_info(const MPDevice *device)
 {
     return &device->info;

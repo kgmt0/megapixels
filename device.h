@@ -18,6 +18,7 @@ bool mp_device_setup_link(MPDevice *device, uint32_t source_pad_id, uint32_t sin
 
 const struct media_device_info *mp_device_get_info(const MPDevice *device);
 const struct media_v2_entity *mp_device_find_entity(const MPDevice *device, const char *driver_name);
+const struct media_v2_entity *mp_device_find_entity_type(const MPDevice *device, const uint32_t type);
 const struct media_v2_entity *mp_device_get_entity(const MPDevice *device, uint32_t id);
 const struct media_v2_entity *mp_device_get_entities(const MPDevice *device);
 size_t mp_device_get_num_entities(const MPDevice *device);

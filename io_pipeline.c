@@ -116,7 +116,7 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
             exit(EXIT_FAILURE);
         }
 
-        const struct media_v2_entity *entity = mp_device_find_entity(info->device, info->media_dev_name);
+        const struct media_v2_entity *entity = mp_device_find_entity_type(info->device, MEDIA_ENT_F_IO_V4L);
         if (!entity) {
             g_printerr("Could not find device video entity\n");
             exit(EXIT_FAILURE);
