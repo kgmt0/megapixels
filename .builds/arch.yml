@@ -8,5 +8,8 @@ tasks:
       cd megapixels
       meson build
       ninja -C build
+  - test: |
+      cd megapixels
+      ninja -C build test
 artifacts:
   - megapixels/build/megapixels
