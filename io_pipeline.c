@@ -118,7 +118,7 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
 
         const struct media_v2_entity *entity = mp_device_find_entity(info->device, info->media_dev_name);
         if (!entity) {
-            g_printerr("Count not find device video entity\n");
+            g_printerr("Could not find device video entity\n");
             exit(EXIT_FAILURE);
         }
 
@@ -128,7 +128,7 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
         const struct media_v2_interface *interface = mp_device_find_entity_interface(info->device, entity->id);
         char dev_name[260];
         if (!mp_find_device_path(interface->devnode, dev_name, 260)) {
-            g_printerr("Count not find video path\n");
+            g_printerr("Could not find video path\n");
             exit(EXIT_FAILURE);
         }
 
@@ -149,7 +149,7 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
 
         const struct media_v2_entity *entity = mp_device_find_entity(dev_info->device, config->dev_name);
         if (!entity) {
-            g_printerr("Count not find camera entity matching '%s'\n", config->dev_name);
+            g_printerr("Could not find camera entity matching '%s'\n", config->dev_name);
             exit(EXIT_FAILURE);
         }
 
@@ -167,7 +167,7 @@ static void setup_camera(MPDeviceList **device_list, const struct mp_camera_conf
         const struct media_v2_interface *interface = mp_device_find_entity_interface(dev_info->device, entity->id);
 
         if (!mp_find_device_path(interface->devnode, info->dev_fname, 260)) {
-            g_printerr("Count not find camera device path\n");
+            g_printerr("Could not find camera device path\n");
             exit(EXIT_FAILURE);
         }
 
