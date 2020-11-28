@@ -297,10 +297,15 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 		return FALSE;
 	}
 
+	// Clear preview area with black
+	cairo_paint(cr);
+
+	// Draw camera preview
 	if (surface) {
 		draw_surface_scaled_centered(cr, preview_width, preview_height, surface);
 	}
 
+	// Draw control overlay
 	cairo_set_source_surface(cr, status_surface, 0, 0);
 	cairo_paint(cr);
 	return FALSE;
