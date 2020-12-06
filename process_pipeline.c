@@ -158,7 +158,7 @@ process_image_for_preview(const MPImage *image)
         image->pixel_format,
         camera->rotate,
         camera->mirrored,
-        camera->colormatrix[0] == 0 ? NULL : camera->colormatrix,
+        camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
         camera->blacklevel,
         skip);
 

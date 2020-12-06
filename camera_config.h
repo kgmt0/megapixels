@@ -32,6 +32,7 @@ struct mp_camera_config {
 
     float colormatrix[9];
     float forwardmatrix[9];
+    float previewmatrix[9];
     int blacklevel;
     int whitelevel;
 

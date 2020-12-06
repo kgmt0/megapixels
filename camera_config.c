@@ -2,6 +2,7 @@
 
 #include "ini.h"
 #include "config.h"
+#include "matrix.h"
 #include <wordexp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -227,6 +228,15 @@ config_ini_handler(void *user, const char *section, const char *name,
     return 1;
 }
 
+void
+calculate_matrices() {
+	for (size_t i = 0; i < MP_MAX_CAMERAS; ++i) {
+		if (cameras[i].colormatrix != NULL && cameras[i].forwardmatrix != NULL) {
+			multiply_matrices(cameras[i].colormatrix, cameras[i].forwardmatrix, cameras[i].previewmatrix);
+		}
+	}
+}
+
 bool mp_load_config() {
     char file[512];
     if (!find_config(file)) {
@@ -237,14 +247,20 @@ bool mp_load_config() {
     int result = ini_parse(file, config_ini_handler, NULL);
     if (result == -1) {
         g_printerr("Config file not found\n");
-    } else if (result == -2) {
+	return false;
+    } 
+    if (result == -2) {
         g_printerr("Could not allocate memory to parse config file\n");
-    } else if (result != 0) {
-        g_printerr("Could not parse config file\n");
-    } else {
-        return true;
+	return false;
     }
-    return false;
+    if (result != 0) {
+        g_printerr("Could not parse config file\n");
+	return false;
+    }
+
+    calculate_matrices();
+    
+    return true;
 }
 
 const char * mp_get_device_make()
