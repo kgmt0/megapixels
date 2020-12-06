@@ -21,10 +21,7 @@
 #include "quickpreview.h"
 #include "io_pipeline.h"
 
-enum user_control {
-	USER_CONTROL_ISO,
-	USER_CONTROL_SHUTTER
-};
+enum user_control { USER_CONTROL_ISO, USER_CONTROL_SHUTTER };
 
 static bool camera_is_initialized = false;
 static const struct mp_camera_config *camera = NULL;
@@ -121,17 +118,14 @@ update_state(const struct mp_main_state *state)
 	return false;
 }
 
-void mp_main_update_state(const struct mp_main_state *state)
+void
+mp_main_update_state(const struct mp_main_state *state)
 {
 	struct mp_main_state *state_copy = malloc(sizeof(struct mp_main_state));
 	*state_copy = *state;
 
-	g_main_context_invoke_full(
-		g_main_context_default(),
-		G_PRIORITY_DEFAULT_IDLE,
-		(GSourceFunc)update_state,
-		state_copy,
-		free);
+	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
+				   (GSourceFunc)update_state, state_copy, free);
 }
 
 static bool
@@ -145,19 +139,16 @@ set_preview(cairo_surface_t *image)
 	return false;
 }
 
-void mp_main_set_preview(cairo_surface_t *image)
+void
+mp_main_set_preview(cairo_surface_t *image)
 {
-	g_main_context_invoke_full(
-		g_main_context_default(),
-		G_PRIORITY_DEFAULT_IDLE,
-		(GSourceFunc)set_preview,
-		image,
-		NULL);
+	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
+				   (GSourceFunc)set_preview, image, NULL);
 }
 
 static void
-draw_surface_scaled_centered(
-	cairo_t *cr, uint32_t dst_width, uint32_t dst_height, cairo_surface_t *surface)
+draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
+			     cairo_surface_t *surface)
 {
 	cairo_save(cr);
 
@@ -165,7 +156,7 @@ draw_surface_scaled_centered(
 
 	int width = cairo_image_surface_get_width(surface);
 	int height = cairo_image_surface_get_height(surface);
-	double scale = MIN(dst_width / (double) width, dst_height / (double) height);
+	double scale = MIN(dst_width / (double)width, dst_height / (double)height);
 	cairo_scale(cr, scale, scale);
 
 	cairo_translate(cr, -width / 2, -height / 2);
@@ -181,10 +172,8 @@ capture_completed(const char *fname)
 	strncpy(last_path, fname, 260);
 
 	// Create a thumbnail from the current surface
-	cairo_surface_t *thumb = cairo_image_surface_create(
-		CAIRO_FORMAT_ARGB32,
-		24,
-		24);
+	cairo_surface_t *thumb =
+		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 24, 24);
 
 	cairo_t *cr = cairo_create(thumb);
 	draw_surface_scaled_centered(cr, 24, 24, surface);
@@ -196,16 +185,13 @@ capture_completed(const char *fname)
 	return false;
 }
 
-void mp_main_capture_completed(const char *fname)
+void
+mp_main_capture_completed(const char *fname)
 {
 	gchar *name = g_strdup(fname);
 
-	g_main_context_invoke_full(
-		g_main_context_default(),
-		G_PRIORITY_DEFAULT_IDLE,
-		(GSourceFunc)capture_completed,
-		name,
-		g_free);
+	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
+				   (GSourceFunc)capture_completed, name, g_free);
 }
 
 static void
@@ -217,14 +203,16 @@ draw_controls()
 	char shutterangle[6];
 
 	if (exposure_is_manual) {
-		temp = (int)((float)exposure / (float)camera->capture_mode.height * 360);
+		temp = (int)((float)exposure / (float)camera->capture_mode.height *
+			     360);
 		sprintf(shutterangle, "%d\u00b0", temp);
 	} else {
 		sprintf(shutterangle, "auto");
 	}
 
 	if (gain_is_manual) {
-		temp = remap(gain - 1, 0, gain_max, camera->iso_min, camera->iso_max);
+		temp = remap(gain - 1, 0, gain_max, camera->iso_min,
+			     camera->iso_max);
 		sprintf(iso, "%d", temp);
 	} else {
 		sprintf(iso, "auto");
@@ -237,16 +225,18 @@ draw_controls()
 	if (gtk_widget_get_window(preview) == NULL) {
 		return;
 	}
-	status_surface = gdk_window_create_similar_surface(gtk_widget_get_window(preview),
-		CAIRO_CONTENT_COLOR_ALPHA,
-		preview_width, 32);
+	status_surface =
+		gdk_window_create_similar_surface(gtk_widget_get_window(preview),
+						  CAIRO_CONTENT_COLOR_ALPHA,
+						  preview_width, 32);
 
 	cr = cairo_create(status_surface);
 	cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
 	cairo_paint(cr);
 
 	// Draw the outlines for the headings
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+			       CAIRO_FONT_WEIGHT_BOLD);
 	cairo_set_font_size(cr, 9);
 	cairo_set_source_rgba(cr, 0, 0, 0, 1);
 
@@ -266,7 +256,8 @@ draw_controls()
 	cairo_show_text(cr, "Shutter");
 
 	// Draw the outlines for the values
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+			       CAIRO_FONT_WEIGHT_NORMAL);
 	cairo_set_font_size(cr, 11);
 	cairo_set_source_rgba(cr, 0, 0, 0, 1);
 
@@ -286,7 +277,7 @@ draw_controls()
 	cairo_show_text(cr, shutterangle);
 
 	cairo_destroy(cr);
-	
+
 	gtk_widget_queue_draw_area(preview, 0, 0, preview_width, 32);
 }
 
@@ -302,7 +293,8 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 
 	// Draw camera preview
 	if (surface) {
-		draw_surface_scaled_centered(cr, preview_width, preview_height, surface);
+		draw_surface_scaled_centered(cr, preview_width, preview_height,
+					     surface);
 	}
 
 	// Draw control overlay
@@ -311,15 +303,14 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	return FALSE;
 }
 
-
 static gboolean
 preview_configure(GtkWidget *widget, GdkEventConfigure *event)
 {
 	int new_preview_width = gtk_widget_get_allocated_width(widget);
 	int new_preview_height = gtk_widget_get_allocated_height(widget);
 
-	if (preview_width != new_preview_width || preview_height != new_preview_height)
-	{
+	if (preview_width != new_preview_width ||
+	    preview_height != new_preview_height) {
 		preview_width = new_preview_width;
 		preview_height = new_preview_height;
 		update_io_pipeline();
@@ -336,11 +327,11 @@ on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 	char uri[275];
 	GError *error = NULL;
 
-	if(strlen(last_path) == 0) {
+	if (strlen(last_path) == 0) {
 		return;
 	}
 	sprintf(uri, "file://%s.tiff", last_path);
-	if(!g_app_info_launch_default_for_uri(uri, NULL, &error)){
+	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
 		g_printerr("Could not launch image viewer: %s\n", error->message);
 	}
 }
@@ -351,7 +342,7 @@ on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
 	char uri[270];
 	GError *error = NULL;
 	sprintf(uri, "file://%s/Pictures", getenv("HOME"));
-	if(!g_app_info_launch_default_for_uri(uri, NULL, &error)){
+	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
 		g_printerr("Could not launch image viewer: %s\n", error->message);
 	}
 }
@@ -377,11 +368,12 @@ on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 			gtk_widget_show(control_box);
 		}
 
-		if (event->x < 60 ) {
+		if (event->x < 60) {
 			// ISO
 			current_control = USER_CONTROL_ISO;
 			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), !gain_is_manual);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
+						     !gain_is_manual);
 			gtk_adjustment_set_lower(control_slider, 0.0);
 			gtk_adjustment_set_upper(control_slider, (float)gain_max);
 			gtk_adjustment_set_value(control_slider, (double)gain);
@@ -390,7 +382,8 @@ on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 			// Shutter angle
 			current_control = USER_CONTROL_SHUTTER;
 			gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto), !exposure_is_manual);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
+						     !exposure_is_manual);
 			gtk_adjustment_set_lower(control_slider, 1.0);
 			gtk_adjustment_set_upper(control_slider, 360.0);
 			gtk_adjustment_set_value(control_slider, (double)exposure);
@@ -415,7 +408,8 @@ void
 on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 {
 	size_t next_index = camera->index + 1;
-	const struct mp_camera_config *next_camera = mp_get_camera_config(next_index);
+	const struct mp_camera_config *next_camera =
+		mp_get_camera_config(next_index);
 
 	if (!next_camera) {
 		next_index = 0;
@@ -445,18 +439,18 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 	bool has_changed;
 
 	switch (current_control) {
-		case USER_CONTROL_ISO:
-			if (gain_is_manual != is_manual) {
-				gain_is_manual = is_manual;
-				has_changed = true;
-			}
-			break;
-		case USER_CONTROL_SHUTTER:
-			if (exposure_is_manual != is_manual) {
-				exposure_is_manual = is_manual;
-				has_changed = true;
-			}
-			break;
+	case USER_CONTROL_ISO:
+		if (gain_is_manual != is_manual) {
+			gain_is_manual = is_manual;
+			has_changed = true;
+		}
+		break;
+	case USER_CONTROL_SHUTTER:
+		if (exposure_is_manual != is_manual) {
+			exposure_is_manual = is_manual;
+			has_changed = true;
+		}
+		break;
 	}
 
 	if (has_changed) {
@@ -472,22 +466,22 @@ on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 
 	bool has_changed = false;
 	switch (current_control) {
-		case USER_CONTROL_ISO:
-			if (value != gain) {
-				gain = (int)value;
-				has_changed = true;
-			}
-			break;
-		case USER_CONTROL_SHUTTER:
-		{
-			// So far all sensors use exposure time in number of sensor rows
-			int new_exposure = (int)(value / 360.0 * camera->capture_mode.height);
-			if (new_exposure != exposure) {
-				exposure = new_exposure;
-				has_changed = true;
-			}
-			break;
+	case USER_CONTROL_ISO:
+		if (value != gain) {
+			gain = (int)value;
+			has_changed = true;
 		}
+		break;
+	case USER_CONTROL_SHUTTER: {
+		// So far all sensors use exposure time in number of sensor rows
+		int new_exposure =
+			(int)(value / 360.0 * camera->capture_mode.height);
+		if (new_exposure != exposure) {
+			exposure = new_exposure;
+			has_changed = true;
+		}
+		break;
+	}
 	}
 
 	if (has_changed) {
@@ -504,19 +498,26 @@ main(int argc, char *argv[])
 
 	setenv("LC_NUMERIC", "C", 1);
 
-
 	gtk_init(&argc, &argv);
-	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
-	GtkBuilder *builder = gtk_builder_new_from_resource("/org/postmarketos/Megapixels/camera.glade");
+	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
+		     TRUE, NULL);
+	GtkBuilder *builder = gtk_builder_new_from_resource(
+		"/org/postmarketos/Megapixels/camera.glade");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
-	GtkWidget *switch_btn = GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
-	GtkWidget *settings_btn = GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
-	GtkWidget *settings_back = GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
-	GtkWidget *error_close = GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
-	GtkWidget *open_last = GTK_WIDGET(gtk_builder_get_object(builder, "open_last"));
-	GtkWidget *open_directory = GTK_WIDGET(gtk_builder_get_object(builder, "open_directory"));
+	GtkWidget *switch_btn =
+		GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
+	GtkWidget *settings_btn =
+		GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
+	GtkWidget *settings_back =
+		GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
+	GtkWidget *error_close =
+		GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
+	GtkWidget *open_last =
+		GTK_WIDGET(gtk_builder_get_object(builder, "open_last"));
+	GtkWidget *open_directory =
+		GTK_WIDGET(gtk_builder_get_object(builder, "open_directory"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
@@ -524,38 +525,49 @@ main(int argc, char *argv[])
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	control_box = GTK_WIDGET(gtk_builder_get_object(builder, "control_box"));
 	control_name = GTK_WIDGET(gtk_builder_get_object(builder, "control_name"));
-	control_slider = GTK_ADJUSTMENT(gtk_builder_get_object(builder, "control_adj"));
+	control_slider =
+		GTK_ADJUSTMENT(gtk_builder_get_object(builder, "control_adj"));
 	control_auto = GTK_WIDGET(gtk_builder_get_object(builder, "control_auto"));
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
-	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked), NULL);
-	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked), NULL);
-	g_signal_connect(settings_btn, "clicked", G_CALLBACK(on_settings_btn_clicked), NULL);
-	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked), NULL);
-	g_signal_connect(open_last, "clicked", G_CALLBACK(on_open_last_clicked), NULL);
-	g_signal_connect(open_directory, "clicked", G_CALLBACK(on_open_directory_clicked), NULL);
+	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked),
+			 NULL);
+	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked),
+			 NULL);
+	g_signal_connect(settings_btn, "clicked",
+			 G_CALLBACK(on_settings_btn_clicked), NULL);
+	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked),
+			 NULL);
+	g_signal_connect(open_last, "clicked", G_CALLBACK(on_open_last_clicked),
+			 NULL);
+	g_signal_connect(open_directory, "clicked",
+			 G_CALLBACK(on_open_directory_clicked), NULL);
 	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
-	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure), NULL);
+	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure),
+			 NULL);
 	gtk_widget_set_events(preview, gtk_widget_get_events(preview) |
-			GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK);
-	g_signal_connect(preview, "button-press-event", G_CALLBACK(on_preview_tap), NULL);
-	g_signal_connect(control_auto, "toggled", G_CALLBACK(on_control_auto_toggled), NULL);
-	g_signal_connect(control_slider, "value-changed", G_CALLBACK(on_control_slider_changed), NULL);
+					       GDK_BUTTON_PRESS_MASK |
+					       GDK_POINTER_MOTION_MASK);
+	g_signal_connect(preview, "button-press-event", G_CALLBACK(on_preview_tap),
+			 NULL);
+	g_signal_connect(control_auto, "toggled",
+			 G_CALLBACK(on_control_auto_toggled), NULL);
+	g_signal_connect(control_slider, "value-changed",
+			 G_CALLBACK(on_control_slider_changed), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
 	if (access("camera.css", F_OK) != -1) {
 		gtk_css_provider_load_from_path(provider, "camera.css", NULL);
 	} else {
-		gtk_css_provider_load_from_resource(provider, "/org/postmarketos/Megapixels/camera.css");
+		gtk_css_provider_load_from_resource(
+			provider, "/org/postmarketos/Megapixels/camera.css");
 	}
 	GtkStyleContext *context = gtk_widget_get_style_context(error_box);
-	gtk_style_context_add_provider(context,
-		GTK_STYLE_PROVIDER(provider),
-		GTK_STYLE_PROVIDER_PRIORITY_USER);
+	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
+				       GTK_STYLE_PROVIDER_PRIORITY_USER);
 	context = gtk_widget_get_style_context(control_box);
-	gtk_style_context_add_provider(context,
-		GTK_STYLE_PROVIDER(provider),
-		GTK_STYLE_PROVIDER_PRIORITY_USER);
+	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
+				       GTK_STYLE_PROVIDER_PRIORITY_USER);
 
 	mp_io_pipeline_start();
 

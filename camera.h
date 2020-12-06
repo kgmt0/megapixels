@@ -5,19 +5,19 @@
 #include <stdint.h>
 
 typedef enum {
-    MP_PIXEL_FMT_UNSUPPORTED,
-    MP_PIXEL_FMT_BGGR8,
-    MP_PIXEL_FMT_GBRG8,
-    MP_PIXEL_FMT_GRBG8,
-    MP_PIXEL_FMT_RGGB8,
-    MP_PIXEL_FMT_BGGR10P,
-    MP_PIXEL_FMT_GBRG10P,
-    MP_PIXEL_FMT_GRBG10P,
-    MP_PIXEL_FMT_RGGB10P,
-    MP_PIXEL_FMT_UYVY,
-    MP_PIXEL_FMT_YUYV,
+	MP_PIXEL_FMT_UNSUPPORTED,
+	MP_PIXEL_FMT_BGGR8,
+	MP_PIXEL_FMT_GBRG8,
+	MP_PIXEL_FMT_GRBG8,
+	MP_PIXEL_FMT_RGGB8,
+	MP_PIXEL_FMT_BGGR10P,
+	MP_PIXEL_FMT_GBRG10P,
+	MP_PIXEL_FMT_GRBG10P,
+	MP_PIXEL_FMT_RGGB10P,
+	MP_PIXEL_FMT_UYVY,
+	MP_PIXEL_FMT_YUYV,
 
-    MP_PIXEL_FMT_MAX,
+	MP_PIXEL_FMT_MAX,
 } MPPixelFormat;
 
 const char *mp_pixel_format_to_str(MPPixelFormat pixel_format);
@@ -31,23 +31,24 @@ uint32_t mp_pixel_format_to_v4l_bus_code(MPPixelFormat pixel_format);
 uint32_t mp_pixel_format_bits_per_pixel(MPPixelFormat pixel_format);
 uint32_t mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width);
 uint32_t mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width);
-uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format, uint32_t height);
+uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format,
+					  uint32_t height);
 
 typedef struct {
-    MPPixelFormat pixel_format;
+	MPPixelFormat pixel_format;
 
-    struct v4l2_fract frame_interval;
-    uint32_t width;
-    uint32_t height;
+	struct v4l2_fract frame_interval;
+	uint32_t width;
+	uint32_t height;
 } MPCameraMode;
 
 bool mp_camera_mode_is_equivalent(const MPCameraMode *m1, const MPCameraMode *m2);
 
 typedef struct {
-    uint32_t pixel_format;
-    uint32_t width;
-    uint32_t height;
-    uint8_t *data;
+	uint32_t pixel_format;
+	uint32_t width;
+	uint32_t height;
+	uint8_t *data;
 } MPImage;
 
 typedef struct _MPCamera MPCamera;
@@ -66,7 +67,8 @@ bool mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode);
 bool mp_camera_start_capture(MPCamera *camera);
 bool mp_camera_stop_capture(MPCamera *camera);
 bool mp_camera_is_capturing(MPCamera *camera);
-bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *), void *user_data);
+bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *),
+			     void *user_data);
 
 typedef struct _MPCameraModeList MPCameraModeList;
 
@@ -77,21 +79,21 @@ MPCameraModeList *mp_camera_mode_list_next(MPCameraModeList *list);
 void mp_camera_mode_list_free(MPCameraModeList *list);
 
 typedef struct {
-    uint32_t id;
-    uint32_t type;
-    char name[32];
+	uint32_t id;
+	uint32_t type;
+	char name[32];
 
-    int32_t min;
-    int32_t max;
-    int32_t step;
-    int32_t default_value;
+	int32_t min;
+	int32_t max;
+	int32_t step;
+	int32_t default_value;
 
-    uint32_t flags;
+	uint32_t flags;
 
-    uint32_t element_size;
-    uint32_t element_count;
-    uint32_t dimensions_count;
-    uint32_t dimensions[V4L2_CTRL_MAX_DIMS];
+	uint32_t element_size;
+	uint32_t element_count;
+	uint32_t dimensions_count;
+	uint32_t dimensions[V4L2_CTRL_MAX_DIMS];
 } MPControl;
 
 const char *mp_control_id_to_str(uint32_t id);
