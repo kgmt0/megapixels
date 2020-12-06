@@ -28,7 +28,7 @@ void on_capture(MPImage image, void *user_data)
 int main(int argc, char *argv[])
 {
     if (argc != 2 && argc != 3) {
-        printf("Usage: ./test_camera <media_device_name> [<sub_device_name>]\n");
+        printf("Usage: %s <media_device_name> [<sub_device_name>]\n", argv[0]);
         return 1;
     }
 
