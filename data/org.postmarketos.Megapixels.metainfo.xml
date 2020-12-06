@@ -26,6 +26,25 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="0.13.0" date="2020-12-06">
+			<description>
+				<p>
+					Major performance improvement release. Thanks to Benjamin Schaaf this release
+					uses threading to process frames for the preview and makes more of the app
+					async, improving the responsiveness a lot.
+
+					This release also adds resolution switching when taking a picture so the preview
+					can run on a lower resolution.
+				</p>
+				<ul>
+					<li>Don't wait for camera to turn on before showing window</li>
+					<li>Use seperate thread for image processing, keeping UI responsive</li>
+					<li>Apply color calibration in the preview</li>
+					<li>Run camera at lower resolution while previewing</li>
+					<li>Added seperate tools for camera testing from the command line</li>
+				</ul>
+			</description>
+		</release>
 		<release version="0.12.0" date="2020-11-09">
 			<description>
 				<p>
