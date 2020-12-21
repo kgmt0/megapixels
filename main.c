@@ -454,6 +454,26 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 	}
 
 	if (has_changed) {
+		// The slider might have been moved while Auto mode is active. When entering
+		// Manual mode, first read the slider value to sync with those changes.
+		double value = gtk_adjustment_get_value(control_slider);
+		switch (current_control) {
+		case USER_CONTROL_ISO:
+			if (value != gain) {
+				gain = (int)value;
+			}
+			break;
+		case USER_CONTROL_SHUTTER: {
+			// So far all sensors use exposure time in number of sensor rows
+			int new_exposure =
+				(int)(value / 360.0 * camera->capture_mode.height);
+			if (new_exposure != exposure) {
+				exposure = new_exposure;
+			}
+			break;
+		}
+		}
+
 		update_io_pipeline();
 		draw_controls();
 	}
