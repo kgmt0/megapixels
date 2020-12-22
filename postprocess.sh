@@ -24,14 +24,6 @@ MAIN_PICTURE="$BURST_DIR"/1
 # Copy the first frame of the burst as the raw photo
 cp "$BURST_DIR"/1.dng "$TARGET_NAME.dng"
 
-# Use stack_frames to merge the burst if available
-if command -v "stack_frames" > /dev/null
-then
-	stack_frames / "$BURST_DIR"/stacked.dng "$BURST_DIR"/*.dng
-	cp "$BURST_DIR"/stacked.dng "$TARGET_NAME.stacked.dng"
-	MAIN_PICTURE="$BURST_DIR"/stacked
-fi
-
 # Create a .jpg if raw processing tools are installed
 DCRAW=""
 TIFF_EXT="dng.tiff"
