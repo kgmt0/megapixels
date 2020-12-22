@@ -21,6 +21,11 @@ if get_option('buildtype') == 'debug'
   add_global_arguments('-DDEBUG', language: 'c')
 endif
 
+# Workaround for libtiff having ABI changes but not changing the internal version number
+if get_option('tiffcfapattern')
+  add_global_arguments('-DLIBTIFF_CFA_PATTERN', language: 'c')
+endif
+
 executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', 'camera.c', 'device.c', 'pipeline.c', 'camera_config.c', 'io_pipeline.c', 'process_pipeline.c', 'matrix.c', resources, dependencies : [gtkdep, libm, tiff, threads], install : true)
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],

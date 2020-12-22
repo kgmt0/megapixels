@@ -236,11 +236,12 @@ process_image_for_capture(const MPImage *image, int count)
 	TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
 	static const short cfapatterndim[] = { 2, 2 };
 	TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, cfapatterndim);
-#if (TIFFLIB_VERSION < 20201219)
+#if (TIFFLIB_VERSION < 20201219) && !LIBTIFF_CFA_PATTERN
 	TIFFSetField(tif, TIFFTAG_CFAPATTERN, "\002\001\001\000"); // BGGR
 #else
 	TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\002\001\001\000"); // BGGR
 #endif
+	printf("TIFF version %d\n", TIFFLIB_VERSION);
 	if (camera->whitelevel) {
 		TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &camera->whitelevel);
 	}
