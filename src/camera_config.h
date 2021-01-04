@@ -41,6 +41,9 @@ struct mp_camera_config {
 	double fnumber;
 	int iso_min;
 	int iso_max;
+
+	char flash_path[260];
+	bool flash_display;
 };
 
 bool mp_load_config();

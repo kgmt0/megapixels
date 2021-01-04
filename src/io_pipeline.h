@@ -19,6 +19,7 @@ struct mp_io_pipeline_state {
 	int exposure;
 
 	bool save_dng;
+	bool flash_enabled;
 };
 
 void mp_io_pipeline_start();

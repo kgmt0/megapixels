@@ -52,6 +52,8 @@ static int exposure;
 static bool has_auto_focus_continuous;
 static bool has_auto_focus_start;
 
+static bool flash_enabled = true;
+
 static bool setting_save_dng;
 
 static MPProcessPipelineBuffer *current_preview_buffer = NULL;
@@ -107,6 +109,7 @@ update_io_pipeline()
 		.exposure_is_manual = exposure_is_manual,
 		.exposure = exposure,
 		.save_dng = setting_save_dng,
+		.flash_enabled = flash_enabled,
 	};
 	mp_io_pipeline_update_state(&io_state);
 }
@@ -759,6 +762,16 @@ open_shutter_controls(GtkWidget *button, gpointer user_data)
 }
 
 static void
+flash_button_clicked(GtkWidget *button, gpointer user_data)
+{
+	flash_enabled = !flash_enabled;
+	update_io_pipeline();
+
+	const char * icon_name = flash_enabled ? "flash-enabled-symbolic" : "flash-disabled-symbolic";
+	gtk_button_set_icon_name(GTK_BUTTON(button), icon_name);
+}
+
+static void
 on_realize(GtkWidget *window, gpointer *data)
 {
 	GtkNative *native = gtk_widget_get_native(window);
@@ -895,6 +908,7 @@ activate(GtkApplication *app, gpointer data)
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *iso_button = GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
 	GtkWidget *shutter_button = GTK_WIDGET(gtk_builder_get_object(builder, "shutter-controls-button"));
+	GtkWidget *flash_button = GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
 	GtkWidget *setting_dng_button = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
@@ -916,6 +930,7 @@ activate(GtkApplication *app, gpointer data)
 
 	g_signal_connect(iso_button, "clicked", G_CALLBACK(open_iso_controls), NULL);
 	g_signal_connect(shutter_button, "clicked", G_CALLBACK(open_shutter_controls), NULL);
+	g_signal_connect(flash_button, "clicked", G_CALLBACK(flash_button_clicked), NULL);
 
 	// Setup actions
 	create_simple_action(app, "capture", G_CALLBACK(run_capture_action));

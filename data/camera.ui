@@ -59,6 +59,15 @@
                             </style>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkButton" id="flash-controls-button">
+                            <property name="valign">start</property>
+                            <property name="icon-name">flash-enabled-symbolic</property>
+                            <style>
+                              <class name="circular"/>
+                            </style>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>

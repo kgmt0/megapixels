@@ -1,16 +1,17 @@
 #include "io_pipeline.h"
 
-#include "device.h"
 #include "camera.h"
+#include "device.h"
+#include "flash.h"
 #include "pipeline.h"
 #include "process_pipeline.h"
-#include <string.h>
-#include <glib.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <errno.h>
 #include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <glib.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/ioctl.h>
 
 struct media_link_info {
 	unsigned int source_entity_id;
@@ -28,6 +29,8 @@ struct camera_info {
 	int fd;
 
 	MPCamera *camera;
+
+	MPFlash *flash;
 
 	int gain_ctrl;
 	int gain_max;
@@ -89,6 +92,8 @@ struct control_state {
 
 static struct control_state desired_controls = {};
 static struct control_state current_controls = {};
+
+static bool flash_enabled = false;
 
 static bool want_focus = false;
 
@@ -216,6 +221,15 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 			info->gain_ctrl = V4L2_CID_ANALOGUE_GAIN;
 			info->gain_max = control.max;
 		}
+
+		// Setup flash
+		if (config->flash_path[0]) {
+			info->flash = mp_led_flash_from_path(config->flash_path);
+		} else if (config->flash_display) {
+			info->flash = mp_create_display_flash();
+		} else {
+			info->flash = NULL;
+		}
 	}
 }
 
@@ -339,6 +353,11 @@ capture(MPPipeline *pipeline, const void *data)
 	just_switched_mode = true;
 
 	mp_camera_start_capture(info->camera);
+
+	// Enable flash
+	if (info->flash && flash_enabled) {
+		mp_flash_enable(info->flash);
+	}
 
 	update_process_pipeline();
 
@@ -490,6 +509,11 @@ on_frame(MPBuffer buffer, void * _data)
 
 			mp_camera_start_capture(info->camera);
 
+			// Disable flash
+			if (info->flash) {
+				mp_flash_disable(info->flash);
+			}
+
 			update_process_pipeline();
 		}
 	}
@@ -571,8 +595,12 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 		desired_controls.exposure = state->exposure;
 
 		has_changed =
-			has_changed || memcmp(&previous_desired, &desired_controls,
-					      sizeof(struct control_state)) != 0;
+			has_changed
+			|| memcmp(&previous_desired, &desired_controls,
+				  sizeof(struct control_state)) != 0
+			|| flash_enabled != state->flash_enabled;
+
+		flash_enabled = state->flash_enabled;
 	}
 
 	assert(has_changed);
