@@ -346,7 +346,7 @@ on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
 {
 	char uri[270];
 	GError *error = NULL;
-	sprintf(uri, "file://%s/Pictures", getenv("HOME"));
+	sprintf(uri, "file://%s", g_get_user_special_dir(G_USER_DIRECTORY_PICTURES));
 	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
 		g_printerr("Could not launch image viewer: %s\n", error->message);
 	}

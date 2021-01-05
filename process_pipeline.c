@@ -350,7 +350,10 @@ process_capture_burst(cairo_surface_t *thumb)
 	char timestamp[30];
 	strftime(timestamp, 30, "%Y%m%d%H%M%S", &tim);
 
-	sprintf(capture_fname, "%s/Pictures/IMG%s", getenv("HOME"), timestamp);
+	sprintf(capture_fname,
+		"%s/IMG%s",
+		g_get_user_special_dir(G_USER_DIRECTORY_PICTURES),
+		timestamp);
 
 	// Start post-processing the captured burst
 	g_print("Post process %s to %s.ext\n", burst_dir, capture_fname);
