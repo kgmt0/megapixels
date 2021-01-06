@@ -65,8 +65,11 @@ if [ -n "$DCRAW" ]; then
 				 -overwrite_original "$TARGET_NAME.jpg"
 		fi
 
+		echo "$TARGET_NAME.jpg"
 	else
 		cp "$MAIN_PICTURE.$TIFF_EXT" "$TARGET_NAME.tiff"
+
+		echo "$TARGET_NAME.tiff"
 	fi
 fi
 

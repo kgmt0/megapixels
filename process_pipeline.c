@@ -302,6 +302,28 @@ process_image_for_capture(const MPImage *image, int count)
 }
 
 static void
+post_process_finished(GSubprocess *proc, GAsyncResult *res, gpointer user_data)
+{
+	char *stdout;
+	g_subprocess_communicate_utf8_finish(proc, res, &stdout, NULL, NULL);
+
+	// The last line contains the file name
+	int end = strlen(stdout);
+	// Skip the newline at the end
+	stdout[--end] = '\0';
+
+	char *path = path = stdout + end - 1;
+	do {
+		if (*path == '\n') {
+			break;
+		}
+		--path;
+	} while (path > stdout);
+
+	mp_main_capture_completed(path);
+}
+
+static void
 process_capture_burst()
 {
 	time_t rawtime;
@@ -315,9 +337,27 @@ process_capture_burst()
 
 	// Start post-processing the captured burst
 	g_print("Post process %s to %s.ext\n", burst_dir, capture_fname);
-	char command[1024];
-	sprintf(command, "%s %s %s &", processing_script, burst_dir, capture_fname);
-	system(command);
+	GError *error = NULL;
+	GSubprocess *proc = g_subprocess_new(
+		G_SUBPROCESS_FLAGS_STDOUT_PIPE,
+		&error,
+		processing_script,
+		burst_dir,
+		capture_fname,
+		NULL);
+
+	if (!proc) {
+		g_printerr("Failed to spawn postprocess process: %s\n",
+			   error->message);
+		return;
+	}
+
+	g_subprocess_communicate_utf8_async(
+		proc,
+		NULL,
+		NULL,
+		(GAsyncReadyCallback)post_process_finished,
+		NULL);
 }
 
 static void
@@ -335,8 +375,6 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 
 		if (captures_remaining == 0) {
 			process_capture_burst();
-
-			mp_main_capture_completed(capture_fname);
 		}
 	}
 

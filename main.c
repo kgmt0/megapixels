@@ -169,7 +169,7 @@ draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_heigh
 static bool
 capture_completed(const char *fname)
 {
-	strncpy(last_path, fname, 260);
+	strncpy(last_path, fname, 259);
 
 	// Create a thumbnail from the current surface
 	cairo_surface_t *thumb =
@@ -330,7 +330,7 @@ on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 	if (strlen(last_path) == 0) {
 		return;
 	}
-	sprintf(uri, "file://%s.tiff", last_path);
+	sprintf(uri, "file://%s", last_path);
 	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
 		g_printerr("Could not launch image viewer: %s\n", error->message);
 	}
