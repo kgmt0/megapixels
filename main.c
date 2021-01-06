@@ -53,7 +53,9 @@ GtkWidget *preview;
 GtkWidget *error_box;
 GtkWidget *error_message;
 GtkWidget *main_stack;
+GtkWidget *open_last_stack;
 GtkWidget *thumb_last;
+GtkWidget *process_spinner;
 GtkWidget *control_box;
 GtkWidget *control_name;
 GtkAdjustment *control_slider;
@@ -180,6 +182,9 @@ capture_completed(const char *fname)
 	cairo_destroy(cr);
 
 	gtk_image_set_from_surface(GTK_IMAGE(thumb_last), thumb);
+
+	gtk_spinner_stop(GTK_SPINNER(process_spinner));
+	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), thumb_last);
 
 	cairo_surface_destroy(thumb);
 	return false;
@@ -350,6 +355,8 @@ on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
 void
 on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 {
+	gtk_spinner_start(GTK_SPINNER(process_spinner));
+	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), process_spinner);
 	mp_io_pipeline_capture();
 }
 
@@ -542,7 +549,9 @@ main(int argc, char *argv[])
 	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
+	open_last_stack = GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
+	process_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
 	control_box = GTK_WIDGET(gtk_builder_get_object(builder, "control_box"));
 	control_name = GTK_WIDGET(gtk_builder_get_object(builder, "control_name"));
 	control_slider =
