@@ -148,7 +148,7 @@ mp_main_set_preview(cairo_surface_t *image)
 				   (GSourceFunc)set_preview, image, NULL);
 }
 
-static void
+void
 draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
 			     cairo_surface_t *surface)
 {
@@ -168,35 +168,35 @@ draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_heigh
 	cairo_restore(cr);
 }
 
+struct capture_completed_args {
+	cairo_surface_t *thumb;
+	char *fname;
+};
+
 static bool
-capture_completed(const char *fname)
+capture_completed(struct capture_completed_args *args)
 {
-	strncpy(last_path, fname, 259);
+	strncpy(last_path, args->fname, 259);
 
-	// Create a thumbnail from the current surface
-	cairo_surface_t *thumb =
-		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 24, 24);
-
-	cairo_t *cr = cairo_create(thumb);
-	draw_surface_scaled_centered(cr, 24, 24, surface);
-	cairo_destroy(cr);
-
-	gtk_image_set_from_surface(GTK_IMAGE(thumb_last), thumb);
+	gtk_image_set_from_surface(GTK_IMAGE(thumb_last), args->thumb);
 
 	gtk_spinner_stop(GTK_SPINNER(process_spinner));
 	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), thumb_last);
 
-	cairo_surface_destroy(thumb);
+	cairo_surface_destroy(args->thumb);
+	g_free(args->fname);
+
 	return false;
 }
 
 void
-mp_main_capture_completed(const char *fname)
+mp_main_capture_completed(cairo_surface_t *thumb, const char *fname)
 {
-	gchar *name = g_strdup(fname);
-
+	struct capture_completed_args *args = malloc(sizeof(struct capture_completed_args));
+	args->thumb = thumb;
+	args->fname = g_strdup(fname);
 	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
-				   (GSourceFunc)capture_completed, name, g_free);
+				   (GSourceFunc)capture_completed, args, free);
 }
 
 static void

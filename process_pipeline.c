@@ -128,7 +128,7 @@ mp_process_pipeline_stop()
 	mp_pipeline_free(pipeline);
 }
 
-static void
+static cairo_surface_t *
 process_image_for_preview(const MPImage *image)
 {
 	uint32_t surface_width, surface_height, skip;
@@ -147,7 +147,23 @@ process_image_for_preview(const MPImage *image)
 		      camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
 		      camera->blacklevel, skip);
 
+	// Create a thumbnail from the preview for the last capture
+	cairo_surface_t *thumb = NULL;
+	if (captures_remaining == 1) {
+		printf("Making thumbnail\n");
+		thumb = cairo_image_surface_create(
+			CAIRO_FORMAT_ARGB32, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE);
+
+		cairo_t *cr = cairo_create(thumb);
+		draw_surface_scaled_centered(
+			cr, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE, surface);
+		cairo_destroy(cr);
+	}
+
+	// Pass processed preview to main
 	mp_main_set_preview(surface);
+
+	return thumb;
 }
 
 static void
@@ -302,7 +318,7 @@ process_image_for_capture(const MPImage *image, int count)
 }
 
 static void
-post_process_finished(GSubprocess *proc, GAsyncResult *res, gpointer user_data)
+post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thumb)
 {
 	char *stdout;
 	g_subprocess_communicate_utf8_finish(proc, res, &stdout, NULL, NULL);
@@ -320,11 +336,11 @@ post_process_finished(GSubprocess *proc, GAsyncResult *res, gpointer user_data)
 		--path;
 	} while (path > stdout);
 
-	mp_main_capture_completed(path);
+	mp_main_capture_completed(thumb, path);
 }
 
 static void
-process_capture_burst()
+process_capture_burst(cairo_surface_t *thumb)
 {
 	time_t rawtime;
 	time(&rawtime);
@@ -357,7 +373,7 @@ process_capture_burst()
 		NULL,
 		NULL,
 		(GAsyncReadyCallback)post_process_finished,
-		NULL);
+		thumb);
 }
 
 static void
@@ -365,7 +381,7 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 {
 	assert(image->width == mode.width && image->height == mode.height);
 
-	process_image_for_preview(image);
+	cairo_surface_t *thumb = process_image_for_preview(image);
 
 	if (captures_remaining > 0) {
 		int count = burst_length - captures_remaining;
@@ -374,8 +390,13 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 		process_image_for_capture(image, count);
 
 		if (captures_remaining == 0) {
-			process_capture_burst();
+			assert(thumb);
+			process_capture_burst(thumb);
+		} else {
+			assert(!thumb);
 		}
+	} else {
+		assert(!thumb);
 	}
 
 	free(image->data);
