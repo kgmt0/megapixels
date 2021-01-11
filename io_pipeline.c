@@ -138,7 +138,7 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 
 		info->video_fd = open(dev_name, O_RDWR);
 		if (info->video_fd == -1) {
-			g_printerr("Could not open %s\n", dev_name);
+			g_printerr("Could not open %s: %s\n", dev_name, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
@@ -179,7 +179,7 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 
 		info->fd = open(info->dev_fname, O_RDWR);
 		if (info->fd == -1) {
-			g_printerr("Could not open %s\n", info->dev_fname);
+			g_printerr("Could not open %s: %s\n", info->dev_fname, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
