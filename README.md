@@ -2,6 +2,8 @@
 
 A GTK3 camera application that knows how to deal with the media request api
 
+irc: #megapixels on freenode
+
 ## Building
 
 ```shell-session
