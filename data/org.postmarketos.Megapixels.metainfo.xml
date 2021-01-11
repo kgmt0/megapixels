@@ -26,6 +26,17 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="0.14.0" date="2021-01-11">
+			<description>
+				<p>
+					Release with some small improvements:
+				</p>
+ 				<ul>
+					<li>The thumbnail button now has a spinner on it while the photo is post-processing</li>
+					<li>The hardcoded ~/Pictures path is no longer used</li>
+				</ul>
+			</description>
+		</release>
 		<release version="0.13.2" date="2020-12-23">
 			<description>
 				<p>
