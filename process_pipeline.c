@@ -331,6 +331,7 @@ post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thu
 	char *path = path = stdout + end - 1;
 	do {
 		if (*path == '\n') {
+			path++;
 			break;
 		}
 		--path;

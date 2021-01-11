@@ -337,7 +337,7 @@ on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 	}
 	sprintf(uri, "file://%s", last_path);
 	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
-		g_printerr("Could not launch image viewer: %s\n", error->message);
+		g_printerr("Could not launch image viewer for '%s': %s\n", uri, error->message);
 	}
 }
 
