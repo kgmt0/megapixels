@@ -1,6 +1,7 @@
 #include "process_pipeline.h"
 
 #include "pipeline.h"
+#include "zbar_pipeline.h"
 #include "main.h"
 #include "config.h"
 #include "quickpreview.h"
@@ -120,12 +121,17 @@ mp_process_pipeline_start()
 	pipeline = mp_pipeline_new();
 
 	mp_pipeline_invoke(pipeline, setup, NULL, 0);
+
+
+	mp_zbar_pipeline_start();
 }
 
 void
 mp_process_pipeline_stop()
 {
 	mp_pipeline_free(pipeline);
+
+	mp_zbar_pipeline_stop();
 }
 
 static cairo_surface_t *
@@ -160,7 +166,8 @@ process_image_for_preview(const MPImage *image)
 		cairo_destroy(cr);
 	}
 
-	// Pass processed preview to main
+	// Pass processed preview to main and zbar
+	mp_zbar_pipeline_process_image(cairo_surface_reference(surface));
 	mp_main_set_preview(surface);
 
 	return thumb;

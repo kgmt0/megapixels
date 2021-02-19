@@ -2,6 +2,7 @@ project('megapixels', 'c')
 gnome = import('gnome')
 gtkdep = dependency('gtk+-3.0')
 tiff = dependency('libtiff-4')
+zbar = dependency('zbar')
 threads = dependency('threads')
 
 cc = meson.get_compiler('c')
@@ -26,7 +27,21 @@ if get_option('tiffcfapattern')
   add_global_arguments('-DLIBTIFF_CFA_PATTERN', language: 'c')
 endif
 
-executable('megapixels', 'main.c', 'ini.c', 'quickpreview.c', 'camera.c', 'device.c', 'pipeline.c', 'camera_config.c', 'io_pipeline.c', 'process_pipeline.c', 'matrix.c', resources, dependencies : [gtkdep, libm, tiff, threads], install : true)
+executable('megapixels',
+           'main.c',
+           'ini.c',
+           'quickpreview.c',
+           'camera.c',
+           'device.c',
+           'pipeline.c',
+           'camera_config.c',
+           'io_pipeline.c',
+           'process_pipeline.c',
+           'zbar_pipeline.c',
+           'matrix.c',
+           resources,
+           dependencies : [gtkdep, libm, tiff, zbar, threads],
+           install : true)
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')

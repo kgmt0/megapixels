@@ -17,6 +17,7 @@
 #include <wordexp.h>
 #include <gtk/gtk.h>
 #include <locale.h>
+#include <zbar.h>
 #include "camera_config.h"
 #include "quickpreview.h"
 #include "io_pipeline.h"
@@ -43,6 +44,8 @@ static bool has_auto_focus_start;
 static cairo_surface_t *surface = NULL;
 static cairo_surface_t *status_surface = NULL;
 static char last_path[260] = "";
+
+static MPZBarScanResult *zbar_result = NULL;
 
 static int burst_length = 3;
 
@@ -130,6 +133,28 @@ mp_main_update_state(const struct mp_main_state *state)
 				   (GSourceFunc)update_state, state_copy, free);
 }
 
+static bool set_zbar_result(MPZBarScanResult *result)
+{
+	if (zbar_result) {
+		for (uint8_t i = 0; i < zbar_result->size; ++i) {
+			free(zbar_result->codes[i].data);
+		}
+
+		free(zbar_result);
+	}
+
+	zbar_result = result;
+	gtk_widget_queue_draw(preview);
+
+	return false;
+}
+
+void mp_main_set_zbar_result(MPZBarScanResult *result)
+{
+	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
+				   (GSourceFunc)set_zbar_result, result, NULL);
+}
+
 static bool
 set_preview(cairo_surface_t *image)
 {
@@ -148,20 +173,26 @@ mp_main_set_preview(cairo_surface_t *image)
 				   (GSourceFunc)set_preview, image, NULL);
 }
 
+static void transform_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
+	                       int src_width, int src_height)
+{
+	cairo_translate(cr, dst_width / 2, dst_height / 2);
+
+	double scale = MIN(dst_width / (double)src_width, dst_height / (double)src_height);
+	cairo_scale(cr, scale, scale);
+
+	cairo_translate(cr, -src_width / 2, -src_height / 2);
+}
+
 void
 draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
 			     cairo_surface_t *surface)
 {
 	cairo_save(cr);
 
-	cairo_translate(cr, dst_width / 2, dst_height / 2);
-
 	int width = cairo_image_surface_get_width(surface);
 	int height = cairo_image_surface_get_height(surface);
-	double scale = MIN(dst_width / (double)width, dst_height / (double)height);
-	cairo_scale(cr, scale, scale);
-
-	cairo_translate(cr, -width / 2, -height / 2);
+	transform_centered(cr, dst_width, dst_height, width, height);
 
 	cairo_set_source_surface(cr, surface, 0, 0);
 	cairo_paint(cr);
@@ -296,10 +327,39 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	// Clear preview area with black
 	cairo_paint(cr);
 
-	// Draw camera preview
 	if (surface) {
-		draw_surface_scaled_centered(cr, preview_width, preview_height,
-					     surface);
+		// Draw camera preview
+		cairo_save(cr);
+
+		int width = cairo_image_surface_get_width(surface);
+		int height = cairo_image_surface_get_height(surface);
+		transform_centered(cr, preview_width, preview_height, width, height);
+
+		cairo_set_source_surface(cr, surface, 0, 0);
+		cairo_paint(cr);
+
+		// Draw zbar image
+		if (zbar_result) {
+			for (uint8_t i = 0; i < zbar_result->size; ++i) {
+				MPZBarCode *code = &zbar_result->codes[i];
+
+				cairo_set_source_rgba(cr, 1, 1, 1, 0.5);
+				cairo_new_path(cr);
+				cairo_move_to(cr, code->bounds_x[0], code->bounds_y[0]);
+				for (uint8_t i = 0; i < 4; ++i) {
+					cairo_line_to(cr, code->bounds_x[i], code->bounds_y[i]);
+				}
+				cairo_close_path(cr);
+				cairo_stroke(cr);
+
+				cairo_save(cr);
+				cairo_translate(cr, code->bounds_x[0], code->bounds_y[0]);
+				cairo_show_text(cr, code->data);
+				cairo_restore(cr);
+			}
+		}
+
+		cairo_restore(cr);
 	}
 
 	// Draw control overlay
@@ -360,6 +420,85 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 	mp_io_pipeline_capture();
 }
 
+static bool
+check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
+{
+	bool right = false, left = false, top = false, bottom = false;
+
+	for (int i = 0; i < 4; ++i) {
+		if (x <= bounds_x[i])
+			left = true;
+		if (x >= bounds_x[i])
+			right = true;
+		if (y <= bounds_y[i])
+			top = true;
+		if (y >= bounds_y[i])
+			bottom = true;
+	}
+
+	return right && left && top && bottom;
+}
+
+static void
+on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
+{
+	GtkWidget *dialog;
+	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+	bool data_is_url = strncmp(code->data, "http://", 7) == 0
+			|| strncmp(code->data, "https://", 8) == 0;
+
+	if (data_is_url) {
+		dialog = gtk_message_dialog_new(
+			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
+			flags,
+			GTK_MESSAGE_QUESTION,
+			GTK_BUTTONS_NONE,
+			"Found a URL '%s' encoded in a %s code.",
+			code->data,
+			code->type);
+		gtk_dialog_add_buttons(
+			GTK_DIALOG(dialog),
+			"_Open URL",
+			GTK_RESPONSE_YES,
+			NULL);
+	} else {
+		dialog = gtk_message_dialog_new(
+			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
+			flags,
+			GTK_MESSAGE_QUESTION,
+			GTK_BUTTONS_NONE,
+			"Found '%s' encoded in a %s code.",
+			code->data,
+			code->type);
+	}
+	gtk_dialog_add_buttons(
+		GTK_DIALOG(dialog),
+		"_Copy",
+		GTK_RESPONSE_ACCEPT,
+		"_Cancel",
+		GTK_RESPONSE_CANCEL,
+		NULL);
+
+	int result = gtk_dialog_run(GTK_DIALOG(dialog));
+
+	GError *error = NULL;
+	switch (result) {
+		case GTK_RESPONSE_YES:
+			if (!g_app_info_launch_default_for_uri(code->data,
+							       NULL, &error)) {
+				g_printerr("Could not launch browser: %s\n",
+					   error->message);
+			}
+		case GTK_RESPONSE_ACCEPT:
+			gtk_clipboard_set_text(
+				gtk_clipboard_get(GDK_SELECTION_PRIMARY),
+				code->data, -1);
+		case GTK_RESPONSE_CANCEL:
+			break;
+	}
+	gtk_widget_destroy(dialog);
+}
+
 void
 on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
@@ -397,6 +536,25 @@ on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 		}
 
 		return;
+	}
+
+	// Tapped zbar result
+	if (zbar_result) {
+		// Transform the event coordinates to the image
+		int width = cairo_image_surface_get_width(surface);
+		int height = cairo_image_surface_get_height(surface);
+		double scale = MIN(preview_width / (double)width, preview_height / (double)height);
+		int x = (event->x - preview_width / 2) / scale + width / 2;
+		int y = (event->y - preview_height / 2) / scale + height / 2;
+
+		for (uint8_t i = 0; i < zbar_result->size; ++i) {
+			MPZBarCode *code = &zbar_result->codes[i];
+
+			if (check_point_inside_bounds(x, y, code->bounds_x, code->bounds_y)) {
+				on_zbar_code_tapped(widget, code);
+				return;
+			}
+		}
 	}
 
 	// Tapped preview image itself, try focussing

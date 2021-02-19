@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera_config.h"
+#include "zbar_pipeline.h"
 #include "gtk/gtk.h"
 
 #define MP_MAIN_THUMB_SIZE 24
@@ -24,6 +25,8 @@ void mp_main_update_state(const struct mp_main_state *state);
 
 void mp_main_set_preview(cairo_surface_t *image);
 void mp_main_capture_completed(cairo_surface_t *thumb, const char *fname);
+
+void mp_main_set_zbar_result(MPZBarScanResult *result);
 
 int remap(int value, int input_min, int input_max, int output_min, int output_max);
 
