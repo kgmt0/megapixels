@@ -43,6 +43,18 @@ then
 	set --
 fi
 
+CONVERT=""
+if command -v "convert" > /dev/null
+then
+	CONVERT="convert"
+	# -fbdd 1	Raw denoising with FBDD
+	set -- -fbdd 1
+elif command -v "gm" > /dev/null
+then
+	CONVERT="gm"
+fi
+
+
 if [ -n "$DCRAW" ]; then
 	# +M		use embedded color matrix
 	# -H 4		Recover highlights by rebuilding them
@@ -52,9 +64,13 @@ if [ -n "$DCRAW" ]; then
 	$DCRAW +M -H 4 -o 1 -q 3 -T "$@" "$MAIN_PICTURE.dng"
 
 	# If imagemagick is available, convert the tiff to jpeg and apply slight sharpening
-	if command -v convert > /dev/null
+	if [ -n "$CONVERT" ];
 	then
-		convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
+		if [ "$CONVERT" == "convert" ]; then
+			convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
+		else
+			gm convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
+		fi
 
 		# If exiftool is installed copy the exif data over from the tiff to the jpeg
 		# since imagemagick is stupid
@@ -75,3 +91,4 @@ fi
 
 # Clean up the temp dir containing the burst
 rm -rf "$BURST_DIR"
+
