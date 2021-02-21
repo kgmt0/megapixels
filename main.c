@@ -445,7 +445,10 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 	GtkWidget *dialog;
 	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
 	bool data_is_url = strncmp(code->data, "http://", 7) == 0
-			|| strncmp(code->data, "https://", 8) == 0;
+			|| strncmp(code->data, "https://", 8) == 0
+			|| strncmp(code->data, "gemini://", 9) == 0;
+
+	char* data = strdup(code->data);
 
 	if (data_is_url) {
 		dialog = gtk_message_dialog_new(
@@ -484,7 +487,7 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 	GError *error = NULL;
 	switch (result) {
 		case GTK_RESPONSE_YES:
-			if (!g_app_info_launch_default_for_uri(code->data,
+			if (!g_app_info_launch_default_for_uri(data,
 							       NULL, &error)) {
 				g_printerr("Could not launch browser: %s\n",
 					   error->message);
@@ -492,9 +495,11 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 		case GTK_RESPONSE_ACCEPT:
 			gtk_clipboard_set_text(
 				gtk_clipboard_get(GDK_SELECTION_PRIMARY),
-				code->data, -1);
+				data, -1);
 		case GTK_RESPONSE_CANCEL:
 			break;
+		default:
+			g_printerr("Wrong dialog result: %d\n", result);
 	}
 	gtk_widget_destroy(dialog);
 }

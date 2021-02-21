@@ -102,8 +102,9 @@ process_symbol(const zbar_symbol_t *symbol)
 
 	const char *data = zbar_symbol_get_data(symbol);
 	unsigned int data_size = zbar_symbol_get_data_length(symbol);
-	code.data = strndup(data, data_size);
 	code.type = zbar_get_symbol_name(type);
+	code.data = strndup(data, data_size+1);
+	code.data[data_size] = 0;
 
 	return code;
 }
