@@ -4,6 +4,7 @@ packages:
   - samurai
   - gtk+3.0-dev
   - tiff-dev
+  - zbar-dev
 tasks:
   - build: |
       cd megapixels

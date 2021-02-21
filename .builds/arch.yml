@@ -3,6 +3,7 @@ packages:
   - meson
   - ninja
   - gtk3
+  - zbar
 tasks:
   - build: |
       cd megapixels
