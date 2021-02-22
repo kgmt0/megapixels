@@ -444,9 +444,8 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 {
 	GtkWidget *dialog;
 	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
-	bool data_is_url = strncmp(code->data, "http://", 7) == 0
-			|| strncmp(code->data, "https://", 8) == 0
-			|| strncmp(code->data, "gemini://", 9) == 0;
+	bool data_is_url = g_uri_is_valid(
+		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
 
 	char* data = strdup(code->data);
 
@@ -489,7 +488,7 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 		case GTK_RESPONSE_YES:
 			if (!g_app_info_launch_default_for_uri(data,
 							       NULL, &error)) {
-				g_printerr("Could not launch browser: %s\n",
+				g_printerr("Could not launch application: %s\n",
 					   error->message);
 			}
 		case GTK_RESPONSE_ACCEPT:
