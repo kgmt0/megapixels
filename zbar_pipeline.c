@@ -160,6 +160,7 @@ mp_zbar_pipeline_process_image(cairo_surface_t *surface)
 {
 	// If we haven't processed the previous frame yet, drop this one
 	if (frames_received != frames_processed) {
+		cairo_surface_destroy(surface);
 		return;
 	}
 
