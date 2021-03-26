@@ -66,7 +66,7 @@ if [ -n "$DCRAW" ]; then
 	# If imagemagick is available, convert the tiff to jpeg and apply slight sharpening
 	if [ -n "$CONVERT" ];
 	then
-		if [ "$CONVERT" == "convert" ]; then
+		if [ "$CONVERT" = "convert" ]; then
 			convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
 		else
 			gm convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
