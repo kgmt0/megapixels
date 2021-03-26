@@ -343,7 +343,8 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 			for (uint8_t i = 0; i < zbar_result->size; ++i) {
 				MPZBarCode *code = &zbar_result->codes[i];
 
-				cairo_set_source_rgba(cr, 1, 1, 1, 0.5);
+				cairo_set_line_width(cr, 3.0);
+				cairo_set_source_rgba(cr, 0, 0.5, 1, 0.75);
 				cairo_new_path(cr);
 				cairo_move_to(cr, code->bounds_x[0], code->bounds_y[0]);
 				for (uint8_t i = 0; i < 4; ++i) {
