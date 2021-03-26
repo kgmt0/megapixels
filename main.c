@@ -420,6 +420,12 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 	mp_io_pipeline_capture();
 }
 
+void
+on_capture_shortcut(void)
+{
+	on_shutter_clicked(NULL, NULL);
+}
+
 static bool
 check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
 {
@@ -759,6 +765,17 @@ main(int argc, char *argv[])
 	context = gtk_widget_get_style_context(control_box);
 	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
 				       GTK_STYLE_PROVIDER_PRIORITY_USER);
+
+	GClosure* capture_shortcut = g_cclosure_new(on_capture_shortcut, 0, 0);
+
+	GtkAccelGroup* accel_group = gtk_accel_group_new();
+	gtk_accel_group_connect(accel_group,
+			GDK_KEY_space,
+			0,
+			0,
+			capture_shortcut);
+
+	gtk_window_add_accel_group(GTK_WINDOW(window), accel_group);
 
 	mp_io_pipeline_start();
 
