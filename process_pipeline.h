@@ -24,7 +24,8 @@ struct mp_process_pipeline_state {
 
 void mp_process_pipeline_start();
 void mp_process_pipeline_stop();
+void mp_process_pipeline_sync();
 
-void mp_process_pipeline_process_image(MPImage image);
+void mp_process_pipeline_process_image(MPBuffer buffer);
 void mp_process_pipeline_capture();
 void mp_process_pipeline_update_state(const struct mp_process_pipeline_state *state);

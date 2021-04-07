@@ -325,6 +325,19 @@ mp_io_pipeline_capture()
 }
 
 static void
+release_buffer(MPPipeline *pipeline, const uint32_t *buffer_index)
+{
+	struct camera_info *info = &cameras[camera->index];
+
+	mp_camera_release_buffer(info->camera, *buffer_index);
+}
+
+void mp_io_pipeline_release_buffer(uint32_t buffer_index)
+{
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback) release_buffer, &buffer_index, sizeof(uint32_t));
+}
+
+static void
 update_controls()
 {
 	// Don't update controls while capturing
@@ -375,7 +388,7 @@ update_controls()
 }
 
 static void
-on_frame(MPImage image, void *data)
+on_frame(MPBuffer buffer, void * _data)
 {
 	// Only update controls right after a frame was captured
 	update_controls();
@@ -384,13 +397,13 @@ on_frame(MPImage image, void *data)
 	// presumably from buffers made ready during the switch. Ignore these.
 	if (just_switched_mode) {
 		if (blank_frame_count < 20) {
-			// Only check a 50x50 area
+			// Only check a 10x10 area
 			size_t test_size =
-				MIN(50, image.width) * MIN(50, image.height);
+				MIN(10, mode.width) * MIN(10, mode.height);
 
 			bool image_is_blank = true;
 			for (size_t i = 0; i < test_size; ++i) {
-				if (image.data[i] != 0) {
+				if (buffer.data[i] != 0) {
 					image_is_blank = false;
 				}
 			}
@@ -407,17 +420,8 @@ on_frame(MPImage image, void *data)
 		blank_frame_count = 0;
 	}
 
-	// Copy from the camera buffer
-	size_t size =
-		mp_pixel_format_width_to_bytes(image.pixel_format, image.width) *
-		image.height;
-	uint8_t *buffer = malloc(size);
-	memcpy(buffer, image.data, size);
-
-	image.data = buffer;
-
 	// Send the image off for processing
-	mp_process_pipeline_process_image(image);
+	mp_process_pipeline_process_image(buffer);
 
 	if (captures_remaining > 0) {
 		--captures_remaining;
@@ -465,6 +469,7 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 			struct camera_info *info = &cameras[camera->index];
 			struct device_info *dev_info = &devices[info->device_index];
 
+			mp_process_pipeline_sync();
 			mp_camera_stop_capture(info->camera);
 			mp_device_setup_link(dev_info->device, info->pad_id,
 					     dev_info->interface_pad_id, false);

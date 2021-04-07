@@ -23,4 +23,6 @@ void mp_io_pipeline_stop();
 void mp_io_pipeline_focus();
 void mp_io_pipeline_capture();
 
+void mp_io_pipeline_release_buffer(uint32_t buffer_index);
+
 void mp_io_pipeline_update_state(const struct mp_io_pipeline_state *state);

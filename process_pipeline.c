@@ -2,6 +2,7 @@
 
 #include "pipeline.h"
 #include "zbar_pipeline.h"
+#include "io_pipeline.h"
 #include "main.h"
 #include "config.h"
 #include "quickpreview.h"
@@ -134,21 +135,27 @@ mp_process_pipeline_stop()
 	mp_zbar_pipeline_stop();
 }
 
+void
+mp_process_pipeline_sync()
+{
+	mp_pipeline_sync(pipeline);
+}
+
 static cairo_surface_t *
-process_image_for_preview(const MPImage *image)
+process_image_for_preview(const uint8_t *image)
 {
 	uint32_t surface_width, surface_height, skip;
 	quick_preview_size(&surface_width, &surface_height, &skip, preview_width,
-			   preview_height, image->width, image->height,
-			   image->pixel_format, camera->rotate);
+			   preview_height, mode.width, mode.height,
+			   mode.pixel_format, camera->rotate);
 
 	cairo_surface_t *surface = cairo_image_surface_create(
 		CAIRO_FORMAT_RGB24, surface_width, surface_height);
 
 	uint8_t *pixels = cairo_image_surface_get_data(surface);
 
-	quick_preview((uint32_t *)pixels, surface_width, surface_height, image->data,
-		      image->width, image->height, image->pixel_format,
+	quick_preview((uint32_t *)pixels, surface_width, surface_height, image,
+		      mode.width, mode.height, mode.pixel_format,
 		      camera->rotate, camera->mirrored,
 		      camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
 		      camera->blacklevel, skip);
@@ -174,7 +181,7 @@ process_image_for_preview(const MPImage *image)
 }
 
 static void
-process_image_for_capture(const MPImage *image, int count)
+process_image_for_capture(const uint8_t *image, int count)
 {
 	time_t rawtime;
 	time(&rawtime);
@@ -193,8 +200,8 @@ process_image_for_capture(const MPImage *image, int count)
 
 	// Define TIFF thumbnail
 	TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 1);
-	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, image->width >> 4);
-	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, image->height >> 4);
+	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, mode.width >> 4);
+	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, mode.height >> 4);
 	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
 	TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
 	TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
@@ -241,8 +248,8 @@ process_image_for_capture(const MPImage *image, int count)
 	// Write black thumbnail, only windows uses this
 	{
 		unsigned char *buf =
-			(unsigned char *)calloc(1, (int)image->width >> 4);
-		for (int row = 0; row < (image->height >> 4); row++) {
+			(unsigned char *)calloc(1, (int)mode.width >> 4);
+		for (int row = 0; row < (mode.height >> 4); row++) {
 			TIFFWriteScanline(tif, buf, row, 0);
 		}
 		free(buf);
@@ -251,8 +258,8 @@ process_image_for_capture(const MPImage *image, int count)
 
 	// Define main photo
 	TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
-	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, image->width);
-	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, image->height);
+	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, mode.width);
+	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, mode.height);
 	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
 	TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
 	TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
@@ -274,9 +281,9 @@ process_image_for_capture(const MPImage *image, int count)
 	TIFFCheckpointDirectory(tif);
 	printf("Writing frame to %s\n", fname);
 
-	unsigned char *pLine = (unsigned char *)malloc(image->width);
-	for (int row = 0; row < image->height; row++) {
-		TIFFWriteScanline(tif, image->data + (row * image->width), row, 0);
+	unsigned char *pLine = (unsigned char *)malloc(mode.width);
+	for (int row = 0; row < mode.height; row++) {
+		TIFFWriteScanline(tif, (void *) image + (row * mode.width), row, 0);
 	}
 	free(pLine);
 	TIFFWriteDirectory(tif);
@@ -293,7 +300,7 @@ process_image_for_capture(const MPImage *image, int count)
 	TIFFSetField(tif, EXIFTAG_EXPOSURETIME,
 		     (mode.frame_interval.numerator /
 		      (float)mode.frame_interval.denominator) /
-			     ((float)image->height / (float)exposure));
+			     ((float)mode.height / (float)exposure));
 	uint16_t isospeed[1];
 	isospeed[0] = (uint16_t)remap(gain - 1, 0, gain_max, camera->iso_min,
 				      camera->iso_max);
@@ -401,9 +408,14 @@ process_capture_burst(cairo_surface_t *thumb)
 }
 
 static void
-process_image(MPPipeline *pipeline, const MPImage *image)
+process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 {
-	assert(image->width == mode.width && image->height == mode.height);
+	size_t size =
+		mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) *
+		mode.height;
+	uint8_t *image = malloc(size);
+	memcpy(image, buffer->data, size);
+	mp_io_pipeline_release_buffer(buffer->index);
 
 	cairo_surface_t *thumb = process_image_for_preview(image);
 
@@ -423,7 +435,7 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 		assert(!thumb);
 	}
 
-	free(image->data);
+	free(image);
 
 	++frames_processed;
 	if (captures_remaining == 0) {
@@ -432,19 +444,19 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 }
 
 void
-mp_process_pipeline_process_image(MPImage image)
+mp_process_pipeline_process_image(MPBuffer buffer)
 {
 	// If we haven't processed the previous frame yet, drop this one
 	if (frames_received != frames_processed && !is_capturing) {
 		printf("Dropped frame at capture\n");
-		free(image.data);
+		mp_io_pipeline_release_buffer(buffer.index);
 		return;
 	}
 
 	++frames_received;
 
-	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_image, &image,
-			   sizeof(MPImage));
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_image, &buffer,
+			   sizeof(MPBuffer));
 }
 
 static void

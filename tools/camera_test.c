@@ -15,20 +15,6 @@ get_time()
 	return t.tv_sec + t.tv_usec * 1e-6;
 }
 
-void
-on_capture(MPImage image, void *user_data)
-{
-	size_t num_bytes =
-		mp_pixel_format_width_to_bytes(image.pixel_format, image.width) *
-		image.height;
-	uint8_t *data = malloc(num_bytes);
-	memcpy(data, image.data, num_bytes);
-
-	printf("      first byte: %d.", data[0]);
-
-	free(data);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -184,7 +170,22 @@ main(int argc, char *argv[])
 		       (last - start_capture) * 1000);
 
 		for (int i = 0; i < 10; ++i) {
-			mp_camera_capture_image(camera, on_capture, NULL);
+			MPBuffer buffer;
+			if (!mp_camera_capture_buffer(camera, &buffer)) {
+				printf("      Failed to capture buffer\n");
+			}
+
+			size_t num_bytes =
+				mp_pixel_format_width_to_bytes(m->pixel_format, m->width) *
+				m->height;
+			uint8_t *data = malloc(num_bytes);
+			memcpy(data, buffer.data, num_bytes);
+
+			printf("      first byte: %d.", data[0]);
+
+			free(data);
+
+			mp_camera_release_buffer(camera, buffer.index);
 
 			double now = get_time();
 			printf(" capture took %fms\n", (now - last) * 1000);
