@@ -2,6 +2,8 @@
 
 #include "camera_config.h"
 
+typedef struct _GdkWindow GdkWindow;
+
 struct mp_process_pipeline_state {
 	const struct mp_camera_config *camera;
 	MPCameraMode mode;
@@ -25,6 +27,8 @@ struct mp_process_pipeline_state {
 void mp_process_pipeline_start();
 void mp_process_pipeline_stop();
 void mp_process_pipeline_sync();
+
+void mp_process_pipeline_init_gl(GdkWindow *window);
 
 void mp_process_pipeline_process_image(MPBuffer buffer);
 void mp_process_pipeline_capture();

@@ -4,6 +4,8 @@ gtkdep = dependency('gtk+-3.0')
 tiff = dependency('libtiff-4')
 zbar = dependency('zbar')
 threads = dependency('threads')
+gl = dependency('gl')
+egl = dependency('egl')
 
 cc = meson.get_compiler('c')
 libm = cc.find_library('m', required: false)
@@ -31,6 +33,7 @@ executable('megapixels',
            'main.c',
            'ini.c',
            'quickpreview.c',
+           'gl_quickpreview.c',
            'camera.c',
            'device.c',
            'pipeline.c',
@@ -40,8 +43,9 @@ executable('megapixels',
            'zbar_pipeline.c',
            'matrix.c',
            resources,
-           dependencies : [gtkdep, libm, tiff, zbar, threads],
-           install : true)
+           dependencies : [gtkdep, libm, tiff, zbar, threads, gl, egl],
+           install : true,
+           link_args : '-Wl,-ldl')
 
 install_data(['data/org.postmarketos.Megapixels.desktop'],
              install_dir : get_option('datadir') / 'applications')

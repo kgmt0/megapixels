@@ -6,11 +6,17 @@
 #include "main.h"
 #include "config.h"
 #include "quickpreview.h"
+#include "gl_quickpreview.h"
 #include <tiffio.h>
 #include <assert.h>
 #include <math.h>
 #include <wordexp.h>
 #include <gtk/gtk.h>
+
+#include "gl_utils.h"
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <gdk/gdkwayland.h>
 
 #define TIFFTAG_FORWARDMATRIX1 50964
 
@@ -141,24 +147,230 @@ mp_process_pipeline_sync()
 	mp_pipeline_sync(pipeline);
 }
 
+#define NUM_BUFFERS 4
+
+static GLQuickPreview *gl_quick_preview_state = NULL;
+
+static EGLDisplay egl_display = EGL_NO_DISPLAY;
+static EGLContext egl_context = EGL_NO_CONTEXT;
+
+// struct buffer {
+// 	GLuint texture_id;
+// 	EGLImage egl_image;
+// 	int dma_fd;
+// 	int dma_stride;
+// 	int dma_offset;
+// 	void *data;
+// };
+// static struct buffer input_buffers[NUM_BUFFERS];
+// static struct buffer output_buffers[NUM_BUFFERS];
+
+static PFNEGLEXPORTDMABUFIMAGEMESAPROC eglExportDMABUFImageMESA;
+
+static const char *
+egl_get_error_str()
+{
+	EGLint error = eglGetError();
+	switch (error) {
+		case EGL_SUCCESS: return "EGL_SUCCESS";
+		case EGL_NOT_INITIALIZED: return "EGL_NOT_INITIALIZED";
+		case EGL_BAD_ACCESS: return "EGL_BAD_ACCESS";
+		case EGL_BAD_ALLOC: return "EGL_BAD_ALLOC";
+		case EGL_BAD_ATTRIBUTE: return "EGL_BAD_ATTRIBUTE";
+		case EGL_BAD_CONTEXT: return "EGL_BAD_CONTEXT";
+		case EGL_BAD_CONFIG: return "EGL_BAD_CONFIG";
+		case EGL_BAD_CURRENT_SURFACE: return "EGL_BAD_CURRENT_SURFACE";
+		case EGL_BAD_DISPLAY: return "EGL_BAD_DISPLAY";
+		case EGL_BAD_SURFACE: return "EGL_BAD_SURFACE";
+		case EGL_BAD_MATCH: return "EGL_BAD_MATCH";
+		case EGL_BAD_PARAMETER: return "EGL_BAD_PARAMETER";
+		case EGL_BAD_NATIVE_PIXMAP: return "EGL_BAD_NATIVE_PIXMAP";
+		case EGL_BAD_NATIVE_WINDOW: return "EGL_BAD_NATIVE_WINDOW";
+		case EGL_CONTEXT_LOST: return "EGL_CONTEXT_LOST";
+	}
+	return "Unknown";
+}
+
+#define RENDERDOC
+
+#ifdef RENDERDOC
+#include <dlfcn.h>
+#include <renderdoc/app.h>
+RENDERDOC_API_1_1_2 *rdoc_api = NULL;
+#endif
+
+static void
+init_gl(MPPipeline *pipeline, GdkWindow **window)
+{
+#ifdef RENDERDOC
+	{
+		void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
+		if (mod)
+		{
+		    pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+		    int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
+		    assert(ret == 1);
+		}
+		else
+		{
+			printf("Renderdoc not found\n");
+		}
+	}
+#endif
+
+	GdkDisplay *gdk_display = gdk_window_get_display(*window);
+	egl_display = eglGetDisplay((EGLNativeDisplayType) gdk_wayland_display_get_wl_display(gdk_display));
+	assert(egl_display != EGL_NO_DISPLAY);
+
+	EGLint major, minor;
+	if (!eglInitialize(egl_display, &major, &minor)) {
+		printf("Failed to initialize egl: %s\n", egl_get_error_str());
+		return;
+	}
+
+	if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+		printf("Failed to bind OpenGL ES: %s\n", egl_get_error_str());
+		return;
+	}
+
+	printf("extensions: %s\n", eglQueryString(egl_display, EGL_EXTENSIONS));
+
+	EGLint config_attrs[1] = {
+		EGL_NONE
+	};
+
+	EGLConfig config;
+	EGLint num_configs = 0;
+	if (!eglChooseConfig(egl_display, config_attrs, &config, 1, &num_configs)) {
+		printf("Failed to pick a egl config: %s\n", egl_get_error_str());
+		return;
+	}
+
+	if (num_configs != 1) {
+		printf("No egl configs found: %s\n", egl_get_error_str());
+		return;
+	}
+
+	EGLint context_attrs[5] = {
+		EGL_CONTEXT_CLIENT_VERSION,
+		2,
+		EGL_CONTEXT_FLAGS_KHR,
+		EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR,
+		EGL_NONE,
+	};
+
+	egl_context = eglCreateContext(egl_display, config, NULL, context_attrs);
+
+	if (egl_context == EGL_NO_CONTEXT) {
+		printf("Failed to create OpenGL ES context: %s\n", egl_get_error_str());
+		return;
+	}
+
+	if (!eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_context))
+	{
+		printf("Failed to set current OpenGL context: %s\n", egl_get_error_str());
+		return;
+	}
+
+	check_gl();
+
+	eglExportDMABUFImageMESA = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)
+		eglGetProcAddress("eglExportDMABUFImageMESA");
+
+	// Generate textures for the buffers
+	// GLuint textures[NUM_BUFFERS * 2];
+	// glGenTextures(NUM_BUFFERS * 2, textures);
+
+	// for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+	// 	input_buffers[i].texture_id = textures[i];
+	// 	input_buffers[i].egl_image = EGL_NO_IMAGE;
+	// 	input_buffers[i].dma_fd = -1;
+	// }
+	// for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+	// 	output_buffers[i].texture_id = textures[NUM_BUFFERS + i];
+	// 	output_buffers[i].egl_image = EGL_NO_IMAGE;
+	// 	output_buffers[i].dma_fd = -1;
+	// }
+
+	check_gl();
+	gl_quick_preview_state = gl_quick_preview_new();
+	check_gl();
+
+	printf("Initialized OpenGL\n");
+}
+
+void
+mp_process_pipeline_init_gl(GdkWindow *window)
+{
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback) init_gl, &window, sizeof(GdkWindow *));
+}
+
 static cairo_surface_t *
 process_image_for_preview(const uint8_t *image)
 {
-	uint32_t surface_width, surface_height, skip;
-	quick_preview_size(&surface_width, &surface_height, &skip, preview_width,
-			   preview_height, mode.width, mode.height,
-			   mode.pixel_format, camera->rotate);
+	cairo_surface_t *surface;
 
-	cairo_surface_t *surface = cairo_image_surface_create(
-		CAIRO_FORMAT_RGB24, surface_width, surface_height);
+	if (gl_quick_preview_state && ql_quick_preview_supports_format(gl_quick_preview_state, mode.pixel_format)) {
+#ifdef RENDERDOC
+		if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+#endif
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		check_gl();
 
-	uint8_t *pixels = cairo_image_surface_get_data(surface);
+		GLuint textures[2];
+		glGenTextures(2, textures);
 
-	quick_preview((uint32_t *)pixels, surface_width, surface_height, image,
-		      mode.width, mode.height, mode.pixel_format,
-		      camera->rotate, camera->mirrored,
-		      camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
-		      camera->blacklevel, skip);
+		glBindTexture(GL_TEXTURE_2D, textures[0]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, mode.width, mode.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, image);
+		check_gl();
+
+		glBindTexture(GL_TEXTURE_2D, textures[1]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, preview_width, preview_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+		check_gl();
+
+		gl_quick_preview(
+			gl_quick_preview_state,
+			textures[1], preview_width, preview_height,
+			textures[0], mode.width, mode.height,
+			mode.pixel_format,
+			camera->rotate, camera->mirrored,
+			camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
+			camera->blacklevel);
+		check_gl();
+
+		surface = cairo_image_surface_create(
+			CAIRO_FORMAT_RGB24, preview_width, preview_height);
+		uint8_t *pixels = cairo_image_surface_get_data(surface);
+		glReadPixels(0, 0, preview_width, preview_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		check_gl();
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+#ifdef RENDERDOC
+		if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+#endif
+	} else {
+		uint32_t surface_width, surface_height, skip;
+		quick_preview_size(&surface_width, &surface_height, &skip, preview_width,
+				   preview_height, mode.width, mode.height,
+				   mode.pixel_format, camera->rotate);
+
+		surface = cairo_image_surface_create(
+			CAIRO_FORMAT_RGB24, surface_width, surface_height);
+
+		uint8_t *pixels = cairo_image_surface_get_data(surface);
+
+		quick_preview((uint32_t *)pixels, surface_width, surface_height, image,
+			      mode.width, mode.height, mode.pixel_format,
+			      camera->rotate, camera->mirrored,
+			      camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
+			      camera->blacklevel, skip);
+	}
 
 	// Create a thumbnail from the preview for the last capture
 	cairo_surface_t *thumb = NULL;
