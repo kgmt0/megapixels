@@ -17,6 +17,8 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <gdk/gdkwayland.h>
+#include <sys/mman.h>
+#include <drm/drm_fourcc.h>
 
 #define TIFFTAG_FORWARDMATRIX1 50964
 
@@ -166,6 +168,7 @@ static EGLContext egl_context = EGL_NO_CONTEXT;
 // static struct buffer output_buffers[NUM_BUFFERS];
 
 static PFNEGLEXPORTDMABUFIMAGEMESAPROC eglExportDMABUFImageMESA;
+static PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC eglExportDMABUFImageQueryMESA;
 
 static const char *
 egl_get_error_str()
@@ -276,6 +279,8 @@ init_gl(MPPipeline *pipeline, GdkWindow **window)
 
 	eglExportDMABUFImageMESA = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)
 		eglGetProcAddress("eglExportDMABUFImageMESA");
+	eglExportDMABUFImageQueryMESA = (PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC)
+		eglGetProcAddress("eglExportDMABUFImageQueryMESA");
 
 	// Generate textures for the buffers
 	// GLuint textures[NUM_BUFFERS * 2];
@@ -292,7 +297,6 @@ init_gl(MPPipeline *pipeline, GdkWindow **window)
 	// 	output_buffers[i].dma_fd = -1;
 	// }
 
-	check_gl();
 	gl_quick_preview_state = gl_quick_preview_new();
 	check_gl();
 
@@ -310,6 +314,8 @@ process_image_for_preview(const uint8_t *image)
 {
 	cairo_surface_t *surface;
 
+	clock_t t1 = clock();
+
 	if (gl_quick_preview_state && ql_quick_preview_supports_format(gl_quick_preview_state, mode.pixel_format)) {
 #ifdef RENDERDOC
 		if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
@@ -323,6 +329,8 @@ process_image_for_preview(const uint8_t *image)
 		glBindTexture(GL_TEXTURE_2D, textures[0]);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, mode.width, mode.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, image);
 		check_gl();
 
@@ -344,7 +352,58 @@ process_image_for_preview(const uint8_t *image)
 
 		surface = cairo_image_surface_create(
 			CAIRO_FORMAT_RGB24, preview_width, preview_height);
-		uint8_t *pixels = cairo_image_surface_get_data(surface);
+		uint32_t *pixels = (uint32_t *)cairo_image_surface_get_data(surface);
+		glFinish();
+
+		clock_t t2 = clock();
+		printf("%fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
+
+		// {
+		// 	glBindTexture(GL_TEXTURE_2D, textures[1]);
+		// 	EGLImage egl_image = eglCreateImage(egl_display, egl_context, EGL_GL_TEXTURE_2D, (EGLClientBuffer)(size_t)textures[1], NULL);
+
+		// 	// Make sure it's in the expected format
+		// 	int fourcc;
+		// 	eglExportDMABUFImageQueryMESA(egl_display, egl_image, &fourcc, NULL, NULL);
+		// 	assert(fourcc == DRM_FORMAT_ABGR8888);
+
+
+		// 	int dmabuf_fd;
+		// 	int stride, offset;
+		// 	eglExportDMABUFImageMESA(egl_display, egl_image, &dmabuf_fd, &stride, &offset);
+
+		// 	int fsize = lseek(dmabuf_fd, 0, SEEK_END);
+		// 	printf("SIZE %d STRIDE %d OFFSET %d SIZE %d:%d\n", fsize, stride, offset, preview_width, preview_height);
+
+		// 	size_t size = stride * preview_height;
+		// 	uint32_t *data = mmap(NULL, fsize, PROT_READ, MAP_SHARED, dmabuf_fd, 0);
+		// 	assert(data != MAP_FAILED);
+
+		// 	int pixel_stride = stride / 4;
+
+		// 	for (size_t y = 0; y < preview_height; ++y) {
+		// 		for (size_t x = 0; x < preview_width; ++x) {
+		// 			uint32_t p = data[x + y * pixel_stride];
+		// 			pixels[x + y * preview_width] = p;
+		// 		// 	uint16_t p = data[x + y * stride];
+		// 		// 	uint32_t r = (p & 0b11111);
+		// 		// 	uint32_t g = ((p >> 5) & 0b11111);
+		// 		// 	uint32_t b = ((p >> 10) & 0b11111);
+		// 		// 	pixels[x + y * preview_width] = (r << 16) | (g << 8) | b;
+		// 		}
+		// 		// memcpy(pixels + preview_width * y, data + stride * y, preview_width * sizeof(uint32_t));
+		// 	}
+
+		// 	{
+		// 		FILE *f = fopen("test.raw", "w");
+		// 		fwrite(data, fsize, 1, f);
+		// 		fclose(f);
+		// 	}
+
+		// 	// memcpy(pixels, data, size);
+		// 	munmap(data, size);
+		// 	close(dmabuf_fd);
+		// }
 		glReadPixels(0, 0, preview_width, preview_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 		check_gl();
 

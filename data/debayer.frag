@@ -1,6 +1,8 @@
 precision mediump float;
 
 uniform sampler2D texture;
+// uniform sampler2D srgb_map;
+uniform mat3 color_matrix;
 
 varying vec2 uv1;
 varying vec2 uv2;
@@ -24,5 +26,11 @@ void main() {
 		mix(pixels.yzw, pixels.xyz, is_top_left.y),
 		is_top_left.x);
 
-	gl_FragColor = vec4(color, 0);
+	vec3 srgb_color = pow(color, vec3(1.0 / 2.2));
+	// vec3 srgb_color = vec3(
+	// 	texture2D(srgb_map, vec2(color.r, 0)).r,
+	// 	texture2D(srgb_map, vec2(color.g, 0)).r,
+	// 	texture2D(srgb_map, vec2(color.b, 0)).r);
+
+	gl_FragColor = vec4((color_matrix * srgb_color).bgr, 0);
 }

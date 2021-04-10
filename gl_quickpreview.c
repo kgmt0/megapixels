@@ -27,6 +27,9 @@ struct _GLQuickPreview {
 	GLuint uniform_transform;
 	GLuint uniform_pixel_size;
 	GLuint uniform_texture;
+	GLuint uniform_srgb_map;
+	GLuint uniform_color_matrix;
+	GLuint srgb_texture;
 };
 
 static GLuint load_shader(const char *path, GLenum type)
@@ -73,6 +76,27 @@ static GLuint load_shader(const char *path, GLenum type)
 	return shader;
 }
 
+// static const uint8_t srgb[] = {
+// 	0, 12, 21, 28, 33, 38, 42, 46, 49, 52, 55, 58, 61, 63, 66, 68, 70,
+// 	73, 75, 77, 79, 81, 82, 84, 86, 88, 89, 91, 93, 94, 96, 97, 99, 100,
+// 	102, 103, 104, 106, 107, 109, 110, 111, 112, 114, 115, 116, 117, 118,
+// 	120, 121, 122, 123, 124, 125, 126, 127, 129, 130, 131, 132, 133, 134,
+// 	135, 136, 137, 138, 139, 140, 141, 142, 142, 143, 144, 145, 146, 147,
+// 	148, 149, 150, 151, 151, 152, 153, 154, 155, 156, 157, 157, 158, 159,
+// 	160, 161, 161, 162, 163, 164, 165, 165, 166, 167, 168, 168, 169, 170,
+// 	171, 171, 172, 173, 174, 174, 175, 176, 176, 177, 178, 179, 179, 180,
+// 	181, 181, 182, 183, 183, 184, 185, 185, 186, 187, 187, 188, 189, 189,
+// 	190, 191, 191, 192, 193, 193, 194, 194, 195, 196, 196, 197, 197, 198,
+// 	199, 199, 200, 201, 201, 202, 202, 203, 204, 204, 205, 205, 206, 206,
+// 	207, 208, 208, 209, 209, 210, 210, 211, 212, 212, 213, 213, 214, 214,
+// 	215, 215, 216, 217, 217, 218, 218, 219, 219, 220, 220, 221, 221, 222,
+// 	222, 223, 223, 224, 224, 225, 226, 226, 227, 227, 228, 228, 229, 229,
+// 	230, 230, 231, 231, 232, 232, 233, 233, 234, 234, 235, 235, 236, 236,
+// 	237, 237, 237, 238, 238, 239, 239, 240, 240, 241, 241, 242, 242, 243,
+// 	243, 244, 244, 245, 245, 245, 246, 246, 247, 247, 248, 248, 249, 249,
+// 	250, 250, 251, 251, 251, 252, 252, 253, 253, 254, 254, 255
+// };
+
 GLQuickPreview *gl_quick_preview_new()
 {
 	GLuint frame_buffer;
@@ -87,9 +111,7 @@ GLQuickPreview *gl_quick_preview_new()
 	glAttachShader(program, frag);
 
 	glBindAttribLocation(program, VERTEX_ATTRIBUTE, "vert");
-	check_gl();
 	glBindAttribLocation(program, TEX_COORD_ATTRIBUTE, "tex_coord");
-	check_gl();
 	glLinkProgram(program);
 	check_gl();
 
@@ -108,22 +130,35 @@ GLQuickPreview *gl_quick_preview_new()
 		printf("Program log: %s\n", log);
 		free(log);
 	}
-
 	check_gl();
+
+	// GLuint srgb_texture;
+	// glGenTextures(1, &srgb_texture);
+	// check_gl();
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	check_gl();
+
+	// glBindTexture(GL_TEXTURE_2D, srgb_texture);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// check_gl();
+	// glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, 256, 1, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, srgb);
+	// check_gl();
+	// glBindTexture(GL_TEXTURE_2D, 0);
 
 	GLQuickPreview *self = malloc(sizeof(GLQuickPreview));
 	self->frame_buffer = frame_buffer;
 	self->program = program;
 
 	self->uniform_transform = glGetUniformLocation(self->program, "transform");
-	check_gl();
-
 	self->uniform_pixel_size = glGetUniformLocation(self->program, "pixel_size");
-	check_gl();
-
 	self->uniform_texture = glGetUniformLocation(self->program, "texture");
-	check_gl();
-
+	self->uniform_color_matrix = glGetUniformLocation(self->program, "color_matrix");
+	self->uniform_srgb_map = glGetUniformLocation(self->program, "srgb_map");
+	// self->srgb_texture = srgb_texture;
 	return self;
 }
 
@@ -190,6 +225,30 @@ gl_quick_preview(GLQuickPreview *self,
 	glBindTexture(GL_TEXTURE_2D, source_id);
 	glUniform1i(self->uniform_texture, 0);
 	check_gl();
+
+	// glActiveTexture(GL_TEXTURE1);
+	// glBindTexture(GL_TEXTURE_2D, self->srgb_texture);
+	// glUniform1i(self->uniform_srgb_map, 1);
+	// check_gl();
+
+	if (colormatrix)
+	{
+		GLfloat transposed[9];
+		for (int i = 0; i < 3; ++i)
+			for (int j = 0; j < 3; ++j)
+				transposed[i + j * 3] = colormatrix[j + i * 3];
+
+		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE, transposed);
+	}
+	else
+	{
+		static const GLfloat identity[9] = {
+			1, 0, 0,
+			0, 1, 0,
+			0, 0, 1,
+		};
+		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE, identity);
+	}
 
 	glVertexAttribPointer(VERTEX_ATTRIBUTE, 2, GL_FLOAT, 0, 0, square_vertices);
 	check_gl();
