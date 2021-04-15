@@ -1,6 +1,6 @@
 project('megapixels', 'c')
 gnome = import('gnome')
-gtkdep = dependency('gtk+-3.0')
+gtkdep = dependency('gtk4')
 tiff = dependency('libtiff-4')
 zbar = dependency('zbar')
 threads = dependency('threads')
@@ -34,6 +34,7 @@ executable('megapixels',
            'ini.c',
            'quickpreview.c',
            'gl_quickpreview.c',
+           'gl_utils.c',
            'camera.c',
            'device.c',
            'pipeline.c',

@@ -607,6 +607,7 @@ mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
 			/* fallthrough */
 		default:
 			errno_printerr("VIDIOC_DQBUF");
+			exit(1);
 			return false;
 		}
 	}

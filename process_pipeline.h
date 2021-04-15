@@ -2,7 +2,7 @@
 
 #include "camera_config.h"
 
-typedef struct _GdkWindow GdkWindow;
+typedef struct _GdkSurface GdkSurface;
 
 struct mp_process_pipeline_state {
 	const struct mp_camera_config *camera;
@@ -28,8 +28,14 @@ void mp_process_pipeline_start();
 void mp_process_pipeline_stop();
 void mp_process_pipeline_sync();
 
-void mp_process_pipeline_init_gl(GdkWindow *window);
+void mp_process_pipeline_init_gl(GdkSurface *window);
 
 void mp_process_pipeline_process_image(MPBuffer buffer);
 void mp_process_pipeline_capture();
 void mp_process_pipeline_update_state(const struct mp_process_pipeline_state *state);
+
+typedef struct _MPProcessPipelineBuffer MPProcessPipelineBuffer;
+
+void mp_process_pipeline_buffer_ref(MPProcessPipelineBuffer *buf);
+void mp_process_pipeline_buffer_unref(MPProcessPipelineBuffer *buf);
+uint32_t mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf);

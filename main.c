@@ -18,10 +18,19 @@
 #include <gtk/gtk.h>
 #include <locale.h>
 #include <zbar.h>
+#include "gl_utils.h"
 #include "camera_config.h"
 #include "quickpreview.h"
 #include "io_pipeline.h"
 #include "process_pipeline.h"
+
+#define RENDERDOC
+
+#ifdef RENDERDOC
+#include <dlfcn.h>
+#include <renderdoc/app.h>
+RENDERDOC_API_1_1_2 *rdoc_api = NULL;
+#endif
 
 enum user_control { USER_CONTROL_ISO, USER_CONTROL_SHUTTER };
 
@@ -42,7 +51,8 @@ static int exposure;
 static bool has_auto_focus_continuous;
 static bool has_auto_focus_start;
 
-static cairo_surface_t *surface = NULL;
+static MPProcessPipelineBuffer *current_preview_buffer = NULL;
+
 static cairo_surface_t *status_surface = NULL;
 static char last_path[260] = "";
 
@@ -157,21 +167,21 @@ void mp_main_set_zbar_result(MPZBarScanResult *result)
 }
 
 static bool
-set_preview(cairo_surface_t *image)
+set_preview(MPProcessPipelineBuffer *buffer)
 {
-	if (surface) {
-		cairo_surface_destroy(surface);
+	if (current_preview_buffer) {
+		mp_process_pipeline_buffer_unref(current_preview_buffer);
 	}
-	surface = image;
+	current_preview_buffer = buffer;
 	gtk_widget_queue_draw(preview);
 	return false;
 }
 
 void
-mp_main_set_preview(cairo_surface_t *image)
+mp_main_set_preview(MPProcessPipelineBuffer *buffer)
 {
 	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
-				   (GSourceFunc)set_preview, image, NULL);
+				   (GSourceFunc)set_preview, buffer, NULL);
 }
 
 static void transform_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
@@ -210,7 +220,7 @@ capture_completed(struct capture_completed_args *args)
 {
 	strncpy(last_path, args->fname, 259);
 
-	gtk_image_set_from_surface(GTK_IMAGE(thumb_last), args->thumb);
+	// gtk_image_set_from_surface(GTK_IMAGE(thumb_last), args->thumb);
 
 	gtk_spinner_stop(GTK_SPINNER(process_spinner));
 	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), thumb_last);
@@ -234,7 +244,7 @@ mp_main_capture_completed(cairo_surface_t *thumb, const char *fname)
 static void
 draw_controls()
 {
-	cairo_t *cr;
+	// cairo_t *cr;
 	char iso[6];
 	int temp;
 	char shutterangle[6];
@@ -259,72 +269,124 @@ draw_controls()
 		cairo_surface_destroy(status_surface);
 
 	// Make a service to show status of controls, 32px high
-	if (gtk_widget_get_window(preview) == NULL) {
+	// if (gtk_widget_get_window(preview) == NULL) {
+	// 	return;
+	// }
+	// status_surface =
+	// 	gdk_window_create_similar_surface(gtk_widget_get_window(preview),
+	// 					  CAIRO_CONTENT_COLOR_ALPHA,
+	// 					  preview_width, 32);
+
+	// cr = cairo_create(status_surface);
+	// cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
+	// cairo_paint(cr);
+
+	// // Draw the outlines for the headings
+	// cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+	// 		       CAIRO_FONT_WEIGHT_BOLD);
+	// cairo_set_font_size(cr, 9);
+	// cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	// cairo_move_to(cr, 16, 16);
+	// cairo_text_path(cr, "ISO");
+	// cairo_stroke(cr);
+
+	// cairo_move_to(cr, 60, 16);
+	// cairo_text_path(cr, "Shutter");
+	// cairo_stroke(cr);
+
+	// // Draw the fill for the headings
+	// cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	// cairo_move_to(cr, 16, 16);
+	// cairo_show_text(cr, "ISO");
+	// cairo_move_to(cr, 60, 16);
+	// cairo_show_text(cr, "Shutter");
+
+	// // Draw the outlines for the values
+	// cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+	// 		       CAIRO_FONT_WEIGHT_NORMAL);
+	// cairo_set_font_size(cr, 11);
+	// cairo_set_source_rgba(cr, 0, 0, 0, 1);
+
+	// cairo_move_to(cr, 16, 26);
+	// cairo_text_path(cr, iso);
+	// cairo_stroke(cr);
+
+	// cairo_move_to(cr, 60, 26);
+	// cairo_text_path(cr, shutterangle);
+	// cairo_stroke(cr);
+
+	// // Draw the fill for the values
+	// cairo_set_source_rgba(cr, 1, 1, 1, 1);
+	// cairo_move_to(cr, 16, 26);
+	// cairo_show_text(cr, iso);
+	// cairo_move_to(cr, 60, 26);
+	// cairo_show_text(cr, shutterangle);
+
+	// cairo_destroy(cr);
+
+	// gtk_widget_queue_draw_area(preview, 0, 0, preview_width, 32);
+}
+
+static GLuint blit_program;
+static GLuint blit_uniform_texture;
+
+static void
+preview_realize(GtkGLArea *area)
+{
+	gtk_gl_area_make_current(area);
+
+	if (gtk_gl_area_get_error(area) != NULL) {
 		return;
 	}
-	status_surface =
-		gdk_window_create_similar_surface(gtk_widget_get_window(preview),
-						  CAIRO_CONTENT_COLOR_ALPHA,
-						  preview_width, 32);
 
-	cr = cairo_create(status_surface);
-	cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
-	cairo_paint(cr);
+	GLuint blit_shaders[] = {
+		gl_load_shader("data/blit.vert", GL_VERTEX_SHADER),
+		gl_load_shader("data/blit.frag", GL_FRAGMENT_SHADER),
+	};
 
-	// Draw the outlines for the headings
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
-			       CAIRO_FONT_WEIGHT_BOLD);
-	cairo_set_font_size(cr, 9);
-	cairo_set_source_rgba(cr, 0, 0, 0, 1);
+	blit_program = gl_link_program(blit_shaders, 2);
+	glBindAttribLocation(blit_program, 0, "vert");
+	glBindAttribLocation(blit_program, 1, "tex_coord");
+	check_gl();
 
-	cairo_move_to(cr, 16, 16);
-	cairo_text_path(cr, "ISO");
-	cairo_stroke(cr);
-
-	cairo_move_to(cr, 60, 16);
-	cairo_text_path(cr, "Shutter");
-	cairo_stroke(cr);
-
-	// Draw the fill for the headings
-	cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	cairo_move_to(cr, 16, 16);
-	cairo_show_text(cr, "ISO");
-	cairo_move_to(cr, 60, 16);
-	cairo_show_text(cr, "Shutter");
-
-	// Draw the outlines for the values
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
-			       CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, 11);
-	cairo_set_source_rgba(cr, 0, 0, 0, 1);
-
-	cairo_move_to(cr, 16, 26);
-	cairo_text_path(cr, iso);
-	cairo_stroke(cr);
-
-	cairo_move_to(cr, 60, 26);
-	cairo_text_path(cr, shutterangle);
-	cairo_stroke(cr);
-
-	// Draw the fill for the values
-	cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	cairo_move_to(cr, 16, 26);
-	cairo_show_text(cr, iso);
-	cairo_move_to(cr, 60, 26);
-	cairo_show_text(cr, shutterangle);
-
-	cairo_destroy(cr);
-
-	gtk_widget_queue_draw_area(preview, 0, 0, preview_width, 32);
+	blit_uniform_texture = glGetUniformLocation(blit_program, "texture");
 }
 
 static gboolean
-preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
+preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 {
+	if (gtk_gl_area_get_error(area) != NULL) {
+		return FALSE;
+	}
+
 	if (!camera_is_initialized) {
 		return FALSE;
 	}
 
+// #ifdef RENDERDOC
+// 	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+// #endif
+
+	glClearColor(0, 0, 0, 1);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	if (current_preview_buffer) {
+		glUseProgram(blit_program);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, mp_process_pipeline_buffer_get_texture_id(current_preview_buffer));
+		glUniform1i(blit_uniform_texture, 0);
+
+		glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, gl_quad_vertices);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, gl_quad_texcoords);
+		glEnableVertexAttribArray(1);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		check_gl();
+	}
+
+	/*
 	// Clear preview area with black
 	cairo_paint(cr);
 
@@ -367,19 +429,23 @@ preview_draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 	// Draw control overlay
 	cairo_set_source_surface(cr, status_surface, 0, 0);
 	cairo_paint(cr);
+	*/
+
+	glFlush();
+
+// #ifdef RENDERDOC
+// 	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+// #endif
+
 	return FALSE;
 }
 
 static gboolean
-preview_configure(GtkWidget *widget, GdkEventConfigure *event)
+preview_resize(GtkWidget *widget, int width, int height, gpointer data)
 {
-	int new_preview_width = gtk_widget_get_allocated_width(widget);
-	int new_preview_height = gtk_widget_get_allocated_height(widget);
-
-	if (preview_width != new_preview_width ||
-	    preview_height != new_preview_height) {
-		preview_width = new_preview_width;
-		preview_height = new_preview_height;
+	if (preview_width != width || preview_height != height) {
+		preview_width = width;
+		preview_height = height;
 		update_io_pipeline();
 	}
 
@@ -422,158 +488,158 @@ on_shutter_clicked(GtkWidget *widget, gpointer user_data)
 	mp_io_pipeline_capture();
 }
 
-void
-on_capture_shortcut(void)
-{
-	on_shutter_clicked(NULL, NULL);
-}
+// void
+// on_capture_shortcut(void)
+// {
+// 	on_shutter_clicked(NULL, NULL);
+// }
 
-static bool
-check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
-{
-	bool right = false, left = false, top = false, bottom = false;
+// static bool
+// check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
+// {
+// 	bool right = false, left = false, top = false, bottom = false;
 
-	for (int i = 0; i < 4; ++i) {
-		if (x <= bounds_x[i])
-			left = true;
-		if (x >= bounds_x[i])
-			right = true;
-		if (y <= bounds_y[i])
-			top = true;
-		if (y >= bounds_y[i])
-			bottom = true;
-	}
+// 	for (int i = 0; i < 4; ++i) {
+// 		if (x <= bounds_x[i])
+// 			left = true;
+// 		if (x >= bounds_x[i])
+// 			right = true;
+// 		if (y <= bounds_y[i])
+// 			top = true;
+// 		if (y >= bounds_y[i])
+// 			bottom = true;
+// 	}
 
-	return right && left && top && bottom;
-}
+// 	return right && left && top && bottom;
+// }
 
-static void
-on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
-{
-	GtkWidget *dialog;
-	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
-	bool data_is_url = g_uri_is_valid(
-		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
+// static void
+// on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
+// {
+// 	GtkWidget *dialog;
+// 	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+// 	bool data_is_url = g_uri_is_valid(
+// 		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
 
-	char* data = strdup(code->data);
+// 	char* data = strdup(code->data);
 
-	if (data_is_url) {
-		dialog = gtk_message_dialog_new(
-			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
-			flags,
-			GTK_MESSAGE_QUESTION,
-			GTK_BUTTONS_NONE,
-			"Found a URL '%s' encoded in a %s code.",
-			code->data,
-			code->type);
-		gtk_dialog_add_buttons(
-			GTK_DIALOG(dialog),
-			"_Open URL",
-			GTK_RESPONSE_YES,
-			NULL);
-	} else {
-		dialog = gtk_message_dialog_new(
-			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
-			flags,
-			GTK_MESSAGE_QUESTION,
-			GTK_BUTTONS_NONE,
-			"Found '%s' encoded in a %s code.",
-			code->data,
-			code->type);
-	}
-	gtk_dialog_add_buttons(
-		GTK_DIALOG(dialog),
-		"_Copy",
-		GTK_RESPONSE_ACCEPT,
-		"_Cancel",
-		GTK_RESPONSE_CANCEL,
-		NULL);
+// 	if (data_is_url) {
+// 		dialog = gtk_message_dialog_new(
+// 			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
+// 			flags,
+// 			GTK_MESSAGE_QUESTION,
+// 			GTK_BUTTONS_NONE,
+// 			"Found a URL '%s' encoded in a %s code.",
+// 			code->data,
+// 			code->type);
+// 		gtk_dialog_add_buttons(
+// 			GTK_DIALOG(dialog),
+// 			"_Open URL",
+// 			GTK_RESPONSE_YES,
+// 			NULL);
+// 	} else {
+// 		dialog = gtk_message_dialog_new(
+// 			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
+// 			flags,
+// 			GTK_MESSAGE_QUESTION,
+// 			GTK_BUTTONS_NONE,
+// 			"Found '%s' encoded in a %s code.",
+// 			code->data,
+// 			code->type);
+// 	}
+// 	gtk_dialog_add_buttons(
+// 		GTK_DIALOG(dialog),
+// 		"_Copy",
+// 		GTK_RESPONSE_ACCEPT,
+// 		"_Cancel",
+// 		GTK_RESPONSE_CANCEL,
+// 		NULL);
 
-	int result = gtk_dialog_run(GTK_DIALOG(dialog));
+// 	int result = gtk_dialog_run(GTK_DIALOG(dialog));
 
-	GError *error = NULL;
-	switch (result) {
-		case GTK_RESPONSE_YES:
-			if (!g_app_info_launch_default_for_uri(data,
-							       NULL, &error)) {
-				g_printerr("Could not launch application: %s\n",
-					   error->message);
-			}
-		case GTK_RESPONSE_ACCEPT:
-			gtk_clipboard_set_text(
-				gtk_clipboard_get(GDK_SELECTION_PRIMARY),
-				data, -1);
-		case GTK_RESPONSE_CANCEL:
-			break;
-		default:
-			g_printerr("Wrong dialog result: %d\n", result);
-	}
-	gtk_widget_destroy(dialog);
-}
+// 	GError *error = NULL;
+// 	switch (result) {
+// 		case GTK_RESPONSE_YES:
+// 			if (!g_app_info_launch_default_for_uri(data,
+// 							       NULL, &error)) {
+// 				g_printerr("Could not launch application: %s\n",
+// 					   error->message);
+// 			}
+// 		case GTK_RESPONSE_ACCEPT:
+// 			gtk_clipboard_set_text(
+// 				gtk_clipboard_get(GDK_SELECTION_PRIMARY),
+// 				data, -1);
+// 		case GTK_RESPONSE_CANCEL:
+// 			break;
+// 		default:
+// 			g_printerr("Wrong dialog result: %d\n", result);
+// 	}
+// 	gtk_widget_destroy(dialog);
+// }
 
-void
-on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
-{
-	if (event->type != GDK_BUTTON_PRESS)
-		return;
+// void
+// on_preview_tap(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
+// {
+// 	if (event->type != GDK_BUTTON_PRESS)
+// 		return;
 
-	// Handle taps on the controls
-	if (event->y < 32) {
-		if (gtk_widget_is_visible(control_box)) {
-			gtk_widget_hide(control_box);
-			return;
-		} else {
-			gtk_widget_show(control_box);
-		}
+// 	// Handle taps on the controls
+// 	if (event->y < 32) {
+// 		if (gtk_widget_is_visible(control_box)) {
+// 			gtk_widget_hide(control_box);
+// 			return;
+// 		} else {
+// 			gtk_widget_show(control_box);
+// 		}
 
-		if (event->x < 60) {
-			// ISO
-			current_control = USER_CONTROL_ISO;
-			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
-						     !gain_is_manual);
-			gtk_adjustment_set_lower(control_slider, 0.0);
-			gtk_adjustment_set_upper(control_slider, (float)gain_max);
-			gtk_adjustment_set_value(control_slider, (double)gain);
+// 		if (event->x < 60) {
+// 			// ISO
+// 			current_control = USER_CONTROL_ISO;
+// 			gtk_label_set_text(GTK_LABEL(control_name), "ISO");
+// 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
+// 						     !gain_is_manual);
+// 			gtk_adjustment_set_lower(control_slider, 0.0);
+// 			gtk_adjustment_set_upper(control_slider, (float)gain_max);
+// 			gtk_adjustment_set_value(control_slider, (double)gain);
 
-		} else if (event->x > 60 && event->x < 120) {
-			// Shutter angle
-			current_control = USER_CONTROL_SHUTTER;
-			gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
-						     !exposure_is_manual);
-			gtk_adjustment_set_lower(control_slider, 1.0);
-			gtk_adjustment_set_upper(control_slider, 360.0);
-			gtk_adjustment_set_value(control_slider, (double)exposure);
-		}
+// 		} else if (event->x > 60 && event->x < 120) {
+// 			// Shutter angle
+// 			current_control = USER_CONTROL_SHUTTER;
+// 			gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
+// 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
+// 						     !exposure_is_manual);
+// 			gtk_adjustment_set_lower(control_slider, 1.0);
+// 			gtk_adjustment_set_upper(control_slider, 360.0);
+// 			gtk_adjustment_set_value(control_slider, (double)exposure);
+// 		}
 
-		return;
-	}
+// 		return;
+// 	}
 
-	// Tapped zbar result
-	if (zbar_result) {
-		// Transform the event coordinates to the image
-		int width = cairo_image_surface_get_width(surface);
-		int height = cairo_image_surface_get_height(surface);
-		double scale = MIN(preview_width / (double)width, preview_height / (double)height);
-		int x = (event->x - preview_width / 2) / scale + width / 2;
-		int y = (event->y - preview_height / 2) / scale + height / 2;
+// 	// Tapped zbar result
+// 	if (zbar_result) {
+// 		// Transform the event coordinates to the image
+// 		int width = cairo_image_surface_get_width(surface);
+// 		int height = cairo_image_surface_get_height(surface);
+// 		double scale = MIN(preview_width / (double)width, preview_height / (double)height);
+// 		int x = (event->x - preview_width / 2) / scale + width / 2;
+// 		int y = (event->y - preview_height / 2) / scale + height / 2;
 
-		for (uint8_t i = 0; i < zbar_result->size; ++i) {
-			MPZBarCode *code = &zbar_result->codes[i];
+// 		for (uint8_t i = 0; i < zbar_result->size; ++i) {
+// 			MPZBarCode *code = &zbar_result->codes[i];
 
-			if (check_point_inside_bounds(x, y, code->bounds_x, code->bounds_y)) {
-				on_zbar_code_tapped(widget, code);
-				return;
-			}
-		}
-	}
+// 			if (check_point_inside_bounds(x, y, code->bounds_x, code->bounds_y)) {
+// 				on_zbar_code_tapped(widget, code);
+// 				return;
+// 			}
+// 		}
+// 	}
 
-	// Tapped preview image itself, try focussing
-	if (has_auto_focus_start) {
-		mp_io_pipeline_focus();
-	}
-}
+// 	// Tapped preview image itself, try focussing
+// 	if (has_auto_focus_start) {
+// 		mp_io_pipeline_focus();
+// 	}
+// }
 
 void
 on_error_close_clicked(GtkWidget *widget, gpointer user_data)
@@ -690,22 +756,35 @@ on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 static void
 on_realize(GtkWidget *window, gpointer *data)
 {
-	mp_process_pipeline_init_gl(gtk_widget_get_window(window));
+	GtkNative *native = gtk_widget_get_native(window);
+	mp_process_pipeline_init_gl(gtk_native_get_surface(native));
 }
 
-int
-main(int argc, char *argv[])
+typedef struct
 {
-	if (!mp_load_config())
-		return 1;
+	GtkApplication parent_instance;
+} MegapixelsApp;
 
-	setenv("LC_NUMERIC", "C", 1);
+typedef GtkApplicationClass MegapixelsAppClass;
 
-	gtk_init(&argc, &argv);
+GType megapixels_app_get_type (void);
+G_DEFINE_TYPE(MegapixelsApp, megapixels_app, GTK_TYPE_APPLICATION)
+
+static void
+startup(GApplication *app)
+{
+	G_APPLICATION_CLASS(megapixels_app_parent_class)->startup(app);
+
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
 		     TRUE, NULL);
-	GtkBuilder *builder = gtk_builder_new_from_resource(
-		"/org/postmarketos/Megapixels/camera.glade");
+
+	GtkBuilder *builder;
+	if (access("camera.ui", F_OK) != -1) {
+		builder = gtk_builder_new_from_file("camera.ui");
+	} else {
+		builder = gtk_builder_new_from_file(
+			"/org/postmarketos/Megapixels/camera.ui");
+	}
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
@@ -734,7 +813,7 @@ main(int argc, char *argv[])
 		GTK_ADJUSTMENT(gtk_builder_get_object(builder, "control_adj"));
 	control_auto = GTK_WIDGET(gtk_builder_get_object(builder, "control_auto"));
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
-	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+	// g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	g_signal_connect(shutter, "clicked", G_CALLBACK(on_shutter_clicked), NULL);
 	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked),
 			 NULL);
@@ -748,14 +827,15 @@ main(int argc, char *argv[])
 			 NULL);
 	g_signal_connect(open_directory, "clicked",
 			 G_CALLBACK(on_open_directory_clicked), NULL);
-	g_signal_connect(preview, "draw", G_CALLBACK(preview_draw), NULL);
-	g_signal_connect(preview, "configure-event", G_CALLBACK(preview_configure),
+	g_signal_connect(preview, "realize", G_CALLBACK(preview_realize), NULL);
+	g_signal_connect(preview, "render", G_CALLBACK(preview_draw), NULL);
+	g_signal_connect(preview, "resize", G_CALLBACK(preview_resize),
 			 NULL);
-	gtk_widget_set_events(preview, gtk_widget_get_events(preview) |
-					       GDK_BUTTON_PRESS_MASK |
-					       GDK_POINTER_MOTION_MASK);
-	g_signal_connect(preview, "button-press-event", G_CALLBACK(on_preview_tap),
-			 NULL);
+	// gtk_widget_set_events(preview, gtk_widget_get_events(preview) |
+	// 				       GDK_BUTTON_PRESS_MASK |
+	// 				       GDK_POINTER_MOTION_MASK);
+	// g_signal_connect(preview, "button-press-event", G_CALLBACK(on_preview_tap),
+	// 		 NULL);
 	g_signal_connect(control_auto, "toggled",
 			 G_CALLBACK(on_control_auto_toggled), NULL);
 	g_signal_connect(control_slider, "value-changed",
@@ -763,7 +843,7 @@ main(int argc, char *argv[])
 
 	GtkCssProvider *provider = gtk_css_provider_new();
 	if (access("camera.css", F_OK) != -1) {
-		gtk_css_provider_load_from_path(provider, "camera.css", NULL);
+		gtk_css_provider_load_from_path(provider, "camera.css");
 	} else {
 		gtk_css_provider_load_from_resource(
 			provider, "/org/postmarketos/Megapixels/camera.css");
@@ -775,26 +855,81 @@ main(int argc, char *argv[])
 	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
 				       GTK_STYLE_PROVIDER_PRIORITY_USER);
 
-	GClosure* capture_shortcut = g_cclosure_new(on_capture_shortcut, 0, 0);
+	// GClosure* capture_shortcut = g_cclosure_new(on_capture_shortcut, 0, 0);
 
-	GtkAccelGroup* accel_group = gtk_accel_group_new();
-	gtk_accel_group_connect(accel_group,
-			GDK_KEY_space,
-			0,
-			0,
-			capture_shortcut);
+	// GtkAccelGroup* accel_group = gtk_accel_group_new();
+	// gtk_accel_group_connect(accel_group,
+	// 		GDK_KEY_space,
+	// 		0,
+	// 		0,
+	// 		capture_shortcut);
 
-	gtk_window_add_accel_group(GTK_WINDOW(window), accel_group);
+	// gtk_window_add_accel_group(GTK_WINDOW(window), accel_group);
 
 	mp_io_pipeline_start();
 
 	camera = mp_get_camera_config(0);
 	update_io_pipeline();
 
+	gtk_application_add_window(GTK_APPLICATION(app), GTK_WINDOW(window));
 	gtk_widget_show(window);
-	gtk_main();
+}
 
+static void
+shutdown(GApplication *app)
+{
+	// Only do cleanup in development, let the OS clean up otherwise
+#ifdef DEBUG
 	mp_io_pipeline_stop();
+#endif
+
+	G_APPLICATION_CLASS(megapixels_app_parent_class)->shutdown(app);
+}
+
+static void
+megapixels_app_init(MegapixelsApp *app)
+{
+}
+
+static void
+megapixels_app_class_init(MegapixelsAppClass *class)
+{
+	GApplicationClass *application_class = G_APPLICATION_CLASS(class);
+
+	application_class->startup = startup;
+	application_class->shutdown = shutdown;
+}
+
+int
+main(int argc, char *argv[])
+{
+#ifdef RENDERDOC
+	{
+		void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
+		if (mod)
+		{
+		    pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+		    int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
+		    assert(ret == 1);
+		}
+		else
+		{
+			printf("Renderdoc not found\n");
+		}
+	}
+#endif
+
+	if (!mp_load_config())
+		return 1;
+
+	setenv("LC_NUMERIC", "C", 1);
+
+	MegapixelsApp *app = g_object_new(
+		megapixels_app_get_type(),
+		"application-id", "org.postmarketos.Megapixels",
+		NULL);
+
+	g_application_run(G_APPLICATION(app), argc, argv);
 
 	return 0;
 }
