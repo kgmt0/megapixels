@@ -1,37 +1,28 @@
-precision highp float;
+#ifdef GL_ES
+precision mediump float;
+#endif
 
 uniform sampler2D texture;
-uniform sampler2D pixel_layout;
 uniform mat3 color_matrix;
 
-uniform vec2 pixel_size;
-
-// varying vec2 uv1;
-// varying vec2 uv2;
 varying vec2 top_left_uv;
 varying vec2 top_right_uv;
 varying vec2 bottom_left_uv;
 varying vec2 bottom_right_uv;
-varying vec2 half_pixel_coord;
-
-#define fetch(p) texture2D(texture, p).r
 
 void main() {
-	vec4 pixels = vec4(
-		fetch(top_left_uv),
-		fetch(top_right_uv),
-		fetch(bottom_right_uv),
-		fetch(bottom_left_uv));
+	// Note the coordinates for texture samples need to be a varying, as the
+	// Mali-400 has this as a fast path allowing 32-bit floats. Otherwise
+	// they end up as 16-bit floats and that's not accurate enough.
+	vec4 samples = vec4(
+		texture2D(texture, top_left_uv).r,
+		texture2D(texture, top_right_uv).r,
+		texture2D(texture, bottom_left_uv).r,
+		texture2D(texture, bottom_right_uv).r);
 
-	vec2 arrangement = floor(half_pixel_coord);
-
-	vec2 is_bottom_left = step(1.0, arrangement);
-
-	// vec3 color = mix(
-	// 	mix(pixels.xyz, pixels.yzw, is_bottom_left.y),
-	// 	mix(pixels.wzy, pixels.zyx, is_bottom_left.y),
-	// 	is_bottom_left.x);
-	vec3 color = pixels.zyx;
+	// Assume BGGR for now. Currently this just takes 3 of the four samples
+	// for each pixel, there's room here to do some better debayering.
+	vec3 color = samples.wyx;
 
 	// Fast SRGB estimate. See https://mimosa-pudica.net/fast-gamma/
 	vec3 srgb_color = (vec3(1.138) * inversesqrt(color) - vec3(0.138)) * color;

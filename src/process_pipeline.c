@@ -5,18 +5,14 @@
 #include "io_pipeline.h"
 #include "main.h"
 #include "config.h"
-#include "quickpreview.h"
-#include "gl_quickpreview.h"
+#include "gles2_debayer.h"
 #include <tiffio.h>
 #include <assert.h>
 #include <math.h>
 #include <wordexp.h>
 #include <gtk/gtk.h>
 
-#include "gl_utils.h"
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-// #include <gdk/gdkwayland.h>
+#include "gl_util.h"
 #include <sys/mman.h>
 #include <drm/drm_fourcc.h>
 
@@ -82,9 +78,9 @@ find_processor(char *script)
 	wordfree(&exp_result);
 
 	// Check postprocess.h in the current working directory
-	sprintf(script, "%s", filename);
+	sprintf(script, "data/%s", filename);
 	if (access(script, F_OK) != -1) {
-		sprintf(script, "./%s", filename);
+		sprintf(script, "./data/%s", filename);
 		printf("Found postprocessor script at %s\n", script);
 		return true;
 	}
@@ -158,9 +154,6 @@ struct _MPProcessPipelineBuffer {
 };
 static MPProcessPipelineBuffer output_buffers[NUM_BUFFERS];
 
-static int output_buffer_width = 0;
-static int output_buffer_height = 0;
-
 void
 mp_process_pipeline_buffer_ref(MPProcessPipelineBuffer *buf)
 {
@@ -179,36 +172,9 @@ mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf)
 	return buf->texture_id;
 }
 
-static GLQuickPreview *gl_quick_preview_state = NULL;
+static GLES2Debayer *gles2_debayer = NULL;
 
 static GdkGLContext *context;
-
-static PFNEGLEXPORTDMABUFIMAGEMESAPROC eglExportDMABUFImageMESA;
-static PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC eglExportDMABUFImageQueryMESA;
-
-// static const char *
-// egl_get_error_str()
-// {
-// 	EGLint error = eglGetError();
-// 	switch (error) {
-// 		case EGL_SUCCESS: return "EGL_SUCCESS";
-// 		case EGL_NOT_INITIALIZED: return "EGL_NOT_INITIALIZED";
-// 		case EGL_BAD_ACCESS: return "EGL_BAD_ACCESS";
-// 		case EGL_BAD_ALLOC: return "EGL_BAD_ALLOC";
-// 		case EGL_BAD_ATTRIBUTE: return "EGL_BAD_ATTRIBUTE";
-// 		case EGL_BAD_CONTEXT: return "EGL_BAD_CONTEXT";
-// 		case EGL_BAD_CONFIG: return "EGL_BAD_CONFIG";
-// 		case EGL_BAD_CURRENT_SURFACE: return "EGL_BAD_CURRENT_SURFACE";
-// 		case EGL_BAD_DISPLAY: return "EGL_BAD_DISPLAY";
-// 		case EGL_BAD_SURFACE: return "EGL_BAD_SURFACE";
-// 		case EGL_BAD_MATCH: return "EGL_BAD_MATCH";
-// 		case EGL_BAD_PARAMETER: return "EGL_BAD_PARAMETER";
-// 		case EGL_BAD_NATIVE_PIXMAP: return "EGL_BAD_NATIVE_PIXMAP";
-// 		case EGL_BAD_NATIVE_WINDOW: return "EGL_BAD_NATIVE_WINDOW";
-// 		case EGL_CONTEXT_LOST: return "EGL_CONTEXT_LOST";
-// 	}
-// 	return "Unknown";
-// }
 
 #define RENDERDOC
 
@@ -230,6 +196,7 @@ init_gl(MPPipeline *pipeline, GdkSurface **surface)
 
 	gdk_gl_context_set_use_es(context, true);
 	gdk_gl_context_set_required_version(context, 2, 0);
+	gdk_gl_context_set_forward_compatible(context, false);
 #ifdef DEBUG
 	gdk_gl_context_set_debug_enabled(context, true);
 #else
@@ -247,28 +214,21 @@ init_gl(MPPipeline *pipeline, GdkSurface **surface)
 	gdk_gl_context_make_current(context);
 	check_gl();
 
-	eglExportDMABUFImageMESA = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)
-		eglGetProcAddress("eglExportDMABUFImageMESA");
-	eglExportDMABUFImageQueryMESA = (PFNEGLEXPORTDMABUFIMAGEQUERYMESAPROC)
-		eglGetProcAddress("eglExportDMABUFImageQueryMESA");
+	// Make a VAO for OpenGL
+	if (!gdk_gl_context_get_use_es(context)) {
+		GLuint vao;
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
+		check_gl();
+	}
 
-	// Generate textures for the buffers
-	// GLuint textures[NUM_BUFFERS * 2];
-	// glGenTextures(NUM_BUFFERS * 2, textures);
-
-	// for (size_t i = 0; i < NUM_BUFFERS; ++i) {
-	// 	input_buffers[i].texture_id = textures[i];
-	// 	input_buffers[i].egl_image = EGL_NO_IMAGE;
-	// 	input_buffers[i].dma_fd = -1;
-	// }
-	// for (size_t i = 0; i < NUM_BUFFERS; ++i) {
-	// 	output_buffers[i].texture_id = textures[NUM_BUFFERS + i];
-	// 	output_buffers[i].egl_image = EGL_NO_IMAGE;
-	// 	output_buffers[i].dma_fd = -1;
-	// }
-
-	gl_quick_preview_state = gl_quick_preview_new();
+	gles2_debayer = gles2_debayer_new(MP_PIXEL_FMT_BGGR8);
 	check_gl();
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	check_gl();
+
+	gles2_debayer_use(gles2_debayer);
 
 	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
 		glGenTextures(1, &output_buffers[i].texture_id);
@@ -279,7 +239,11 @@ init_gl(MPPipeline *pipeline, GdkSurface **surface)
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
-	printf("Initialized OpenGL\n");
+	gboolean is_es = gdk_gl_context_get_use_es(context);
+	int major, minor;
+	gdk_gl_context_get_version(context, &major, &minor);
+
+	printf("Initialized %s %d.%d\n", is_es ? "OpenGL ES" : "OpenGL", major, minor);
 }
 
 void
@@ -292,8 +256,6 @@ static cairo_surface_t *
 process_image_for_preview(const uint8_t *image)
 {
 	clock_t t1 = clock();
-
-	assert(gl_quick_preview_state && ql_quick_preview_supports_format(gl_quick_preview_state, mode.pixel_format));
 
 	// Pick an available buffer
 	MPProcessPipelineBuffer *output_buffer = NULL;
@@ -311,8 +273,6 @@ process_image_for_preview(const uint8_t *image)
 #ifdef RENDERDOC
 	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
 #endif
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	check_gl();
 
 	// Copy image to a GL texture. TODO: This can be avoided
 	GLuint input_texture;
@@ -325,24 +285,13 @@ process_image_for_preview(const uint8_t *image)
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, mode.width, mode.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, image);
 	check_gl();
 
-
-	gl_quick_preview(
-		gl_quick_preview_state,
-		output_buffer->texture_id, output_buffer_width, output_buffer_height,
-		input_texture, mode.width, mode.height,
-		mode.pixel_format,
-		camera->rotate, camera->mirrored,
-		camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
-		camera->blacklevel);
+	gles2_debayer_process(
+		gles2_debayer, output_buffer->texture_id, input_texture);
 	check_gl();
 
-	// surface = cairo_image_surface_create(
-	// 	CAIRO_FORMAT_RGB24, preview_width, preview_height);
-	// uint32_t *pixels = (uint32_t *)cairo_image_surface_get_data(surface);
 	glFinish();
 
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glDeleteTextures(1, &input_texture);
 
 	clock_t t2 = clock();
 	printf("%fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
@@ -727,10 +676,10 @@ mp_process_pipeline_capture()
 }
 
 static void
-update_output_buffers()
+on_output_changed()
 {
-	output_buffer_width = mode.width / 2;
-	output_buffer_height = mode.height / 2;
+	int output_buffer_width = mode.width / 2;
+	int output_buffer_height = mode.height / 2;
 
 	if (camera->rotate != 0 || camera->rotate != 180) {
 		int tmp = output_buffer_width;
@@ -744,12 +693,20 @@ update_output_buffers()
 	}
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	gles2_debayer_configure(
+		gles2_debayer,
+		output_buffer_width, output_buffer_height,
+		mode.width, mode.height,
+		camera->rotate, camera->mirrored,
+		camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
+		camera->blacklevel);
 }
 
 static void
 update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state)
 {
-	const bool buffer_update_required = (!mp_camera_mode_is_equivalent(&mode, &state->mode) || preview_width != state->preview_width || preview_height != state->preview_height);
+	const bool output_changed = (!mp_camera_mode_is_equivalent(&mode, &state->mode) || preview_width != state->preview_width || preview_height != state->preview_height);
 
 	camera = state->camera;
 	mode = state->mode;
@@ -766,8 +723,8 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
 	exposure_is_manual = state->exposure_is_manual;
 	exposure = state->exposure;
 
-	if (buffer_update_required) {
-		update_output_buffers();
+	if (output_changed) {
+		on_output_changed();
 	}
 
 	struct mp_main_state main_state = {

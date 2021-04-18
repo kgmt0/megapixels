@@ -1,4 +1,6 @@
+#ifdef GL_ES
 precision mediump float;
+#endif
 
 attribute vec2 vert;
 attribute vec2 tex_coord;

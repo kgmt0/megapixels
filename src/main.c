@@ -18,9 +18,8 @@
 #include <gtk/gtk.h>
 #include <locale.h>
 #include <zbar.h>
-#include "gl_utils.h"
+#include "gl_util.h"
 #include "camera_config.h"
-#include "quickpreview.h"
 #include "io_pipeline.h"
 #include "process_pipeline.h"
 
@@ -330,6 +329,7 @@ draw_controls()
 
 static GLuint blit_program;
 static GLuint blit_uniform_texture;
+static GLuint quad;
 
 static void
 preview_realize(GtkGLArea *area)
@@ -340,17 +340,27 @@ preview_realize(GtkGLArea *area)
 		return;
 	}
 
+	// Make a VAO for OpenGL
+	if (!gtk_gl_area_get_use_es(area)) {
+		GLuint vao;
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
+		check_gl();
+	}
+
 	GLuint blit_shaders[] = {
-		gl_load_shader("data/blit.vert", GL_VERTEX_SHADER),
-		gl_load_shader("data/blit.frag", GL_FRAGMENT_SHADER),
+		gl_util_load_shader("/org/postmarketos/Megapixels/blit.vert", GL_VERTEX_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/blit.frag", GL_FRAGMENT_SHADER, NULL, 0),
 	};
 
-	blit_program = gl_link_program(blit_shaders, 2);
-	glBindAttribLocation(blit_program, 0, "vert");
-	glBindAttribLocation(blit_program, 1, "tex_coord");
+	blit_program = gl_util_link_program(blit_shaders, 2);
+	glBindAttribLocation(blit_program, GL_UTIL_VERTEX_ATTRIBUTE, "vert");
+	glBindAttribLocation(blit_program, GL_UTIL_TEX_COORD_ATTRIBUTE, "tex_coord");
 	check_gl();
 
 	blit_uniform_texture = glGetUniformLocation(blit_program, "texture");
+
+	quad = gl_util_new_quad();
 }
 
 static gboolean
@@ -364,9 +374,9 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 		return FALSE;
 	}
 
-// #ifdef RENDERDOC
-// 	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
-// #endif
+#ifdef RENDERDOC
+	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+#endif
 
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -377,13 +387,10 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, mp_process_pipeline_buffer_get_texture_id(current_preview_buffer));
 		glUniform1i(blit_uniform_texture, 0);
-
-		glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, gl_quad_vertices);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, gl_quad_texcoords);
-		glEnableVertexAttribArray(1);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		check_gl();
+
+		gl_util_bind_quad(quad);
+		gl_util_draw_quad(quad);
 	}
 
 	/*
@@ -433,9 +440,9 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 
 	glFlush();
 
-// #ifdef RENDERDOC
-// 	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
-// #endif
+#ifdef RENDERDOC
+	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+#endif
 
 	return FALSE;
 }
@@ -758,6 +765,9 @@ on_realize(GtkWidget *window, gpointer *data)
 {
 	GtkNative *native = gtk_widget_get_native(window);
 	mp_process_pipeline_init_gl(gtk_native_get_surface(native));
+
+	camera = mp_get_camera_config(0);
+	update_io_pipeline();
 }
 
 typedef struct
@@ -778,13 +788,10 @@ startup(GApplication *app)
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
 		     TRUE, NULL);
 
-	GtkBuilder *builder;
-	if (access("camera.ui", F_OK) != -1) {
-		builder = gtk_builder_new_from_file("camera.ui");
-	} else {
-		builder = gtk_builder_new_from_file(
-			"/org/postmarketos/Megapixels/camera.ui");
-	}
+	assert(g_resources_lookup_data("/org/postmarketos/Megapixels/camera.ui", 0, NULL) != NULL);
+
+	GtkBuilder *builder = gtk_builder_new_from_resource(
+		"/org/postmarketos/Megapixels/camera.ui");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *shutter = GTK_WIDGET(gtk_builder_get_object(builder, "shutter"));
@@ -842,12 +849,8 @@ startup(GApplication *app)
 			 G_CALLBACK(on_control_slider_changed), NULL);
 
 	GtkCssProvider *provider = gtk_css_provider_new();
-	if (access("camera.css", F_OK) != -1) {
-		gtk_css_provider_load_from_path(provider, "camera.css");
-	} else {
-		gtk_css_provider_load_from_resource(
-			provider, "/org/postmarketos/Megapixels/camera.css");
-	}
+	gtk_css_provider_load_from_resource(
+		provider, "/org/postmarketos/Megapixels/camera.css");
 	GtkStyleContext *context = gtk_widget_get_style_context(error_box);
 	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
 				       GTK_STYLE_PROVIDER_PRIORITY_USER);
@@ -867,9 +870,6 @@ startup(GApplication *app)
 	// gtk_window_add_accel_group(GTK_WINDOW(window), accel_group);
 
 	mp_io_pipeline_start();
-
-	camera = mp_get_camera_config(0);
-	update_io_pipeline();
 
 	gtk_application_add_window(GTK_APPLICATION(app), GTK_WINDOW(window));
 	gtk_widget_show(window);
