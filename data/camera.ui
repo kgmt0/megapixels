@@ -18,9 +18,8 @@
           <object class="GtkStackPage">
             <property name="name">main</property>
             <property name="child">
-              <object class="GtkBox" id="page_main">
+              <object class="GtkOverlay" id="page_main">
                 <property name="can-focus">0</property>
-                <property name="orientation">vertical</property>
                 <child>
                   <object class="GtkGLArea" id="preview">
                     <property name="vexpand">1</property>
@@ -28,7 +27,7 @@
                     <property name="use-es">1</property>
                   </object>
                 </child>
-                <child>
+                <child type="overlay">
                   <object class="GtkBox" id="control_box">
                     <property name="visible">0</property>
                     <property name="can-focus">0</property>
@@ -68,38 +67,53 @@
                     </style>
                   </object>
                 </child>
-                <child>
-                  <object class="GtkActionBar" id="controls_box">
+                <child type="overlay">
+                  <object class="GtkBox" id="controls_box">
+                    <property name="orientation">horizontal</property>
+                    <property name="hexpand">1</property>
+                    <property name="valign">end</property>
+                    <property name="homogeneous">0</property>
                     <property name="can-focus">0</property>
-                    <child type="start">
-                      <object class="GtkButton" id="settings">
-                        <property name="receives-default">1</property>
+                    <property name="margin-bottom">5</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="hexpand">1</property>
+                        <property name="valign">end</property>
+                        <property name="can-focus">0</property>
+                        <property name="margin-start">5</property>
+                        <property name="spacing">5</property>
                         <child>
-                          <object class="GtkImage">
-                            <property name="can-focus">0</property>
-                            <property name="resource">/org/postmarketos/Megapixels/settings-symbolic.svg</property>
+                          <object class="GtkButton" id="settings">
+                            <property name="receives-default">1</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="can-focus">0</property>
+                                <property name="resource">/org/postmarketos/Megapixels/settings-symbolic.svg</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="switch_camera">
+                            <property name="receives-default">1</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="can-focus">0</property>
+                                <property name="resource">/org/postmarketos/Megapixels/switch-camera.svg</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
                     </child>
-                    <child type="start">
-                      <object class="GtkButton" id="switch_camera">
+                    <child>
+                      <object class="GtkButton">
+                        <property name="action-name">app.capture</property>
                         <property name="receives-default">1</property>
                         <child>
                           <object class="GtkImage">
-                            <property name="can-focus">0</property>
-                            <property name="resource">/org/postmarketos/Megapixels/switch-camera.svg</property>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child type="center">
-                      <object class="GtkButton" id="shutter">
-                        <property name="width-request">48</property>
-                        <property name="height-request">48</property>
-                        <property name="receives-default">1</property>
-                        <child>
-                          <object class="GtkImage">
+                            <property name="pixel-size">60</property>
                             <property name="can-focus">0</property>
                             <property name="resource">/org/postmarketos/Megapixels/shutter-button.svg</property>
                           </object>
@@ -109,35 +123,46 @@
                         </style>
                       </object>
                     </child>
-                    <child type="end">
-                      <object class="GtkButton" id="open_directory">
-                        <property name="receives-default">1</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="hexpand">1</property>
+                        <property name="halign">end</property>
+                        <property name="valign">end</property>
+                        <property name="can-focus">0</property>
+                        <property name="margin-end">5</property>
+                        <property name="spacing">5</property>
                         <child>
-                          <object class="GtkImage">
-                            <property name="can-focus">0</property>
-                            <property name="resource">/org/postmarketos/Megapixels/folder-symbolic.svg</property>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child type="end">
-                      <object class="GtkButton" id="open_last">
-                        <property name="receives-default">1</property>
-                        <child>
-                          <object class="GtkStack" id="open_last_stack">
-                            <property name="can-focus">0</property>
+                          <object class="GtkButton" id="open_directory">
+                            <property name="receives-default">1</property>
                             <child>
-                              <object class="GtkImage" id="thumb_last">
-                                <property name="width-request">24</property>
-                                <property name="height-request">24</property>
+                              <object class="GtkImage">
                                 <property name="can-focus">0</property>
+                                <property name="resource">/org/postmarketos/Megapixels/folder-symbolic.svg</property>
                               </object>
                             </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="open_last">
+                            <property name="receives-default">1</property>
                             <child>
-                              <object class="GtkSpinner" id="process_spinner">
-                                <property name="width-request">24</property>
-                                <property name="height-request">24</property>
+                              <object class="GtkStack" id="open_last_stack">
                                 <property name="can-focus">0</property>
+                                <child>
+                                  <object class="GtkImage" id="thumb_last">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinner" id="process_spinner">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>
@@ -146,7 +171,7 @@
                     </child>
                   </object>
                 </child>
-                <child>
+                <child type="overlay">
                   <object class="GtkBox" id="error_box">
                     <property name="visible">0</property>
                     <property name="can-focus">0</property>
@@ -184,18 +209,15 @@
             </property>
           </object>
         </child>
-        <!-- <child>
+        <child>
           <object class="GtkStackPage">
             <property name="name">settings</property>
             <property name="title" translatable="yes">page1</property>
-            <property name="position">1</property>
             <property name="child">
               <object class="GtkScrolledWindow" id="page_settings">
-                <property name="shadow-type">in</property>
                 <property name="child">
                   <object class="GtkViewport">
                     <property name="can-focus">0</property>
-                    <property name="shadow-type">none</property>
                     <property name="child">
                       <object class="GtkBox">
                         <property name="can-focus">0</property>
@@ -227,101 +249,6 @@
                             </child>
                           </object>
                         </child>
-                        <child>
-                          <object class="GtkBox">
-                            <property name="can-focus">0</property>
-                            <property name="orientation">vertical</property>
-                            <property name="spacing">4</property>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="can-focus">0</property>
-                                <property name="halign">start</property>
-                                <property name="label" translatable="yes">Photos</property>
-                                <style>
-                                  <class name="heading"/>
-                                </style>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkFrame">
-                                <property name="can-focus">0</property>
-                                <property name="shadow-type">in</property>
-                                <child>
-                                  <object class="GtkAlignment">
-                                    <property name="visible">True</property>
-                                    <property name="can-focus">False</property>
-                                    <property name="left-padding">12</property>
-                                    <child>
-                                      <object class="GtkBox">
-                                        <property name="can-focus">0</property>
-                                        <property name="orientation">vertical</property>
-                                        <property name="spacing">6</property>
-                                        <child>
-                                          <object class="GtkLabel">
-                                            <property name="can-focus">0</property>
-                                            <property name="halign">start</property>
-                                            <property name="label" translatable="yes">Resolution</property>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkComboBox">
-                                            <property name="can-focus">0</property>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <placeholder/>
-                                        </child>
-                                        <child>
-                                          <placeholder/>
-                                        </child>
-                                        <child>
-                                          <object class="GtkLabel">
-                                            <property name="can-focus">0</property>
-                                            <property name="halign">start</property>
-                                            <property name="label" translatable="yes">Storage mode</property>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="can-focus">0</property>
-                                            <property name="orientation">vertical</property>
-                                            <child>
-                                              <object class="GtkCheckButton" id="store_vng">
-                                                <property name="label" translatable="yes">Debayer with VNG (slowest)</property>
-                                                <property name="active">1</property>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkCheckButton" id="store_simple">
-                                                <property name="label" translatable="yes">Debayer with linear interpolation</property>
-                                                <property name="group">store_vng</property>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkCheckButton" id="store_raw">
-                                                <property name="label" translatable="yes">Raw</property>
-                                                <property name="group">store_vng</property>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </child>
-                                <child type="label_item">
-                                  <placeholder/>
-                                </child>
-                                <style>
-                                  <class name="view"/>
-                                </style>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                        <child>
-                          <placeholder/>
-                        </child>
                       </object>
                     </property>
                   </object>
@@ -329,7 +256,7 @@
               </object>
             </property>
           </object>
-        </child> -->
+        </child>
       </object>
     </property>
   </object>

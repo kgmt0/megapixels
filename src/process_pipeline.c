@@ -675,11 +675,14 @@ mp_process_pipeline_capture()
 	mp_pipeline_invoke(pipeline, capture, NULL, 0);
 }
 
+static int output_buffer_width = -1;
+static int output_buffer_height = -1;
+
 static void
 on_output_changed()
 {
-	int output_buffer_width = mode.width / 2;
-	int output_buffer_height = mode.height / 2;
+	output_buffer_width = mode.width / 2;
+	output_buffer_height = mode.height / 2;
 
 	if (camera->rotate != 0 || camera->rotate != 180) {
 		int tmp = output_buffer_width;
@@ -730,6 +733,8 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
 	struct mp_main_state main_state = {
 		.camera = camera,
 		.mode = mode,
+		.image_width = output_buffer_width,
+		.image_height = output_buffer_height,
 		.gain_is_manual = state->gain_is_manual,
 		.gain = gain,
 		.gain_max = gain_max,
