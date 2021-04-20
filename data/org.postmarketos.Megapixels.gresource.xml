@@ -3,8 +3,8 @@
   <gresource prefix="/org/postmarketos/Megapixels">
     <file preprocess="xml-stripblanks">camera.ui</file>
     <file>camera.css</file>
-    <file preprocess="xml-stripblanks">switch-camera.svg</file>
-    <file preprocess="xml-stripblanks">shutter-button.svg</file>
+    <file preprocess="xml-stripblanks">switch-camera-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">shutter-button-symbolic.svg</file>
     <file preprocess="xml-stripblanks">folder-symbolic.svg</file>
     <file preprocess="xml-stripblanks">settings-symbolic.svg</file>
     <file>blit.vert</file>

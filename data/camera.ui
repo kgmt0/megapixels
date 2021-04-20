@@ -68,7 +68,7 @@
                   </object>
                 </child>
                 <child type="overlay">
-                  <object class="GtkBox" id="controls_box">
+                  <object class="GtkBox">
                     <property name="orientation">horizontal</property>
                     <property name="hexpand">1</property>
                     <property name="valign">end</property>
@@ -84,23 +84,25 @@
                         <property name="margin-start">5</property>
                         <property name="spacing">5</property>
                         <child>
-                          <object class="GtkButton" id="settings">
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-settings</property>
                             <property name="receives-default">1</property>
                             <child>
                               <object class="GtkImage">
                                 <property name="can-focus">0</property>
-                                <property name="resource">/org/postmarketos/Megapixels/settings-symbolic.svg</property>
+                                <property name="icon-name">settings-symbolic</property>
                               </object>
                             </child>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkButton" id="switch_camera">
+                          <object class="GtkButton">
+                            <property name="action-name">app.switch-camera</property>
                             <property name="receives-default">1</property>
                             <child>
                               <object class="GtkImage">
                                 <property name="can-focus">0</property>
-                                <property name="resource">/org/postmarketos/Megapixels/switch-camera.svg</property>
+                                <property name="icon-name">switch-camera-symbolic</property>
                               </object>
                             </child>
                           </object>
@@ -115,7 +117,7 @@
                           <object class="GtkImage">
                             <property name="pixel-size">60</property>
                             <property name="can-focus">0</property>
-                            <property name="resource">/org/postmarketos/Megapixels/shutter-button.svg</property>
+                            <property name="icon-name">shutter-button-symbolic</property>
                           </object>
                         </child>
                         <style>
@@ -133,18 +135,8 @@
                         <property name="margin-end">5</property>
                         <property name="spacing">5</property>
                         <child>
-                          <object class="GtkButton" id="open_directory">
-                            <property name="receives-default">1</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="can-focus">0</property>
-                                <property name="resource">/org/postmarketos/Megapixels/folder-symbolic.svg</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkButton" id="open_last">
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-last</property>
                             <property name="receives-default">1</property>
                             <child>
                               <object class="GtkStack" id="open_last_stack">
@@ -167,8 +159,23 @@
                             </child>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-photos</property>
+                            <property name="receives-default">1</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="can-focus">0</property>
+                                <property name="icon-name">folder-symbolic</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
                       </object>
                     </child>
+                    <style>
+                      <class name="button-overlay"/>
+                    </style>
                   </object>
                 </child>
                 <child type="overlay">

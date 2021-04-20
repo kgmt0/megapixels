@@ -473,7 +473,7 @@ preview_resize(GtkWidget *widget, int width, int height, gpointer data)
 }
 
 void
-on_open_last_clicked(GtkWidget *widget, gpointer user_data)
+run_open_last_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	char uri[275];
 	GError *error = NULL;
@@ -488,7 +488,7 @@ on_open_last_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 void
-on_open_directory_clicked(GtkWidget *widget, gpointer user_data)
+run_open_photos_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	char uri[270];
 	GError *error = NULL;
@@ -663,7 +663,7 @@ on_error_close_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 void
-on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
+run_camera_switch_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	size_t next_index = camera->index + 1;
 	const struct mp_camera_config *next_camera =
@@ -679,7 +679,7 @@ on_camera_switch_clicked(GtkWidget *widget, gpointer user_data)
 }
 
 void
-on_settings_btn_clicked(GtkWidget *widget, gpointer user_data)
+run_open_settings_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "settings");
 }
@@ -778,30 +778,39 @@ on_realize(GtkWidget *window, gpointer *data)
 	update_io_pipeline();
 }
 
+static GSimpleAction *create_simple_action(GtkApplication *app, const char *name, GCallback callback)
+{
+	GSimpleAction *action = g_simple_action_new(name, NULL);
+	g_signal_connect(action, "activate", callback, NULL);
+	g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(action));
+	return action;
+}
+
 static void
 activate(GtkApplication *app, gpointer data)
 {
 	g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme",
 		     TRUE, NULL);
 
-	assert(g_resources_lookup_data("/org/postmarketos/Megapixels/camera.ui", 0, NULL) != NULL);
+	GdkDisplay *display = gdk_display_get_default();
+	GtkIconTheme *icon_theme = gtk_icon_theme_get_for_display(display);
+	gtk_icon_theme_add_resource_path(icon_theme, "/org/postmarketos/Megapixels");
+
+	GtkCssProvider *provider = gtk_css_provider_new();
+	gtk_css_provider_load_from_resource(
+		provider, "/org/postmarketos/Megapixels/camera.css");
+	gtk_style_context_add_provider_for_display(
+		display, GTK_STYLE_PROVIDER(provider),
+		GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
 	GtkBuilder *builder = gtk_builder_new_from_resource(
 		"/org/postmarketos/Megapixels/camera.ui");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-	GtkWidget *switch_btn =
-		GTK_WIDGET(gtk_builder_get_object(builder, "switch_camera"));
-	GtkWidget *settings_btn =
-		GTK_WIDGET(gtk_builder_get_object(builder, "settings"));
 	GtkWidget *settings_back =
 		GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
 	GtkWidget *error_close =
 		GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
-	GtkWidget *open_last =
-		GTK_WIDGET(gtk_builder_get_object(builder, "open_last"));
-	GtkWidget *open_directory =
-		GTK_WIDGET(gtk_builder_get_object(builder, "open_directory"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
 	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
@@ -817,16 +826,8 @@ activate(GtkApplication *app, gpointer data)
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked),
 			 NULL);
-	g_signal_connect(switch_btn, "clicked", G_CALLBACK(on_camera_switch_clicked),
-			 NULL);
-	g_signal_connect(settings_btn, "clicked",
-			 G_CALLBACK(on_settings_btn_clicked), NULL);
 	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked),
 			 NULL);
-	g_signal_connect(open_last, "clicked", G_CALLBACK(on_open_last_clicked),
-			 NULL);
-	g_signal_connect(open_directory, "clicked",
-			 G_CALLBACK(on_open_directory_clicked), NULL);
 
 	g_signal_connect(preview, "realize", G_CALLBACK(preview_realize), NULL);
 	g_signal_connect(preview, "render", G_CALLBACK(preview_draw), NULL);
@@ -840,28 +841,17 @@ activate(GtkApplication *app, gpointer data)
 	g_signal_connect(control_slider, "value-changed",
 			 G_CALLBACK(on_control_slider_changed), NULL);
 
-	GtkCssProvider *provider = gtk_css_provider_new();
-	gtk_css_provider_load_from_resource(
-		provider, "/org/postmarketos/Megapixels/camera.css");
-	GtkStyleContext *context = gtk_widget_get_style_context(error_box);
-	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
-				       GTK_STYLE_PROVIDER_PRIORITY_USER);
-	context = gtk_widget_get_style_context(control_box);
-	gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(provider),
-				       GTK_STYLE_PROVIDER_PRIORITY_USER);
+	// Setup actions
+	create_simple_action(app, "capture", G_CALLBACK(run_capture_action));
+	create_simple_action(app, "camera-switch", G_CALLBACK(run_camera_switch_action));
+	create_simple_action(app, "open-settings", G_CALLBACK(run_open_settings_action));
+	create_simple_action(app, "open-last", G_CALLBACK(run_open_last_action));
+	create_simple_action(app, "open-photos", G_CALLBACK(run_open_photos_action));
+	create_simple_action(app, "quit", G_CALLBACK(run_quit_action));
 
-	// Setup capture action
-	GSimpleAction *capture_action = g_simple_action_new("capture", NULL);
-	g_signal_connect(capture_action, "activate", G_CALLBACK(run_capture_action), NULL);
-	g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(capture_action));
-
+	// Setup shortcuts
 	const char *capture_accels[] = { "space", NULL };
 	gtk_application_set_accels_for_action(app, "app.capture", capture_accels);
-
-	// Setup quit action
-	GSimpleAction *quit_action = g_simple_action_new("quit", NULL);
-	g_signal_connect(quit_action, "activate", G_CALLBACK(run_quit_action), app);
-	g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(quit_action));
 
 	const char *quit_accels[] = { "<Ctrl>q", "<Ctrl>w", NULL };
 	gtk_application_set_accels_for_action(app, "app.quit", quit_accels);
