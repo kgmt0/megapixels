@@ -61,12 +61,8 @@ static MPZBarScanResult *zbar_result = NULL;
 
 static int burst_length = 3;
 
-static enum user_control current_control;
-
 // Widgets
 GtkWidget *preview;
-GtkWidget *error_box;
-GtkWidget *error_message;
 GtkWidget *main_stack;
 GtkWidget *open_last_stack;
 GtkWidget *thumb_last;
@@ -598,39 +594,6 @@ run_quit_action(GSimpleAction *action, GVariant *param, GApplication *app)
 void
 preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 {
-	// Handle taps on the controls
-	// if (event->y < 32) {
-	// 	if (gtk_widget_is_visible(control_box)) {
-	// 		gtk_widget_hide(control_box);
-	// 		return;
-	// 	} else {
-	// 		gtk_widget_show(control_box);
-	// 	}
-
-	// 	if (event->x < 60) {
-	// 		// ISO
-	// 		current_control = USER_CONTROL_ISO;
-	// 		gtk_label_set_text(GTK_LABEL(control_name), "ISO");
-	// 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
-	// 					     !gain_is_manual);
-	// 		gtk_adjustment_set_lower(control_slider, 0.0);
-	// 		gtk_adjustment_set_upper(control_slider, (float)gain_max);
-	// 		gtk_adjustment_set_value(control_slider, (double)gain);
-
-	// 	} else if (event->x > 60 && event->x < 120) {
-	// 		// Shutter angle
-	// 		current_control = USER_CONTROL_SHUTTER;
-	// 		gtk_label_set_text(GTK_LABEL(control_name), "Shutter");
-	// 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(control_auto),
-	// 					     !exposure_is_manual);
-	// 		gtk_adjustment_set_lower(control_slider, 1.0);
-	// 		gtk_adjustment_set_upper(control_slider, 360.0);
-	// 		gtk_adjustment_set_value(control_slider, (double)exposure);
-	// 	}
-
-	// 	return;
-	// }
-
 	// Tapped zbar result
 	// if (zbar_result) {
 	// 	// Transform the event coordinates to the image
@@ -656,13 +619,7 @@ preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 	}
 }
 
-void
-on_error_close_clicked(GtkWidget *widget, gpointer user_data)
-{
-	gtk_widget_hide(error_box);
-}
-
-void
+static void
 run_camera_switch_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	size_t next_index = camera->index + 1;
@@ -678,19 +635,132 @@ run_camera_switch_action(GSimpleAction *action, GVariant *param, gpointer user_d
 	update_io_pipeline();
 }
 
-void
+static void
 run_open_settings_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "settings");
 }
 
-void
-on_back_clicked(GtkWidget *widget, gpointer user_data)
+static void
+run_close_settings_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "main");
 }
 
-void
+static void
+on_controls_scale_changed(GtkAdjustment *adjustment, void (*set_fn)(double))
+{
+	set_fn(gtk_adjustment_get_value(adjustment));
+}
+
+static void
+update_value(GtkAdjustment *adjustment, GtkLabel *label)
+{
+	char buf[12];
+	snprintf(buf, 12, "%.0f", gtk_adjustment_get_value(adjustment));
+	gtk_label_set_label(label, buf);
+}
+
+static void
+on_auto_controls_toggled(GtkToggleButton *button, void (*set_auto_fn)(bool))
+{
+	set_auto_fn(gtk_toggle_button_get_active(button));
+}
+
+static void
+update_scale(GtkToggleButton *button, GtkScale *scale)
+{
+	gtk_widget_set_sensitive(GTK_WIDGET(scale), !gtk_toggle_button_get_active(button));
+}
+
+static void
+open_controls(GtkWidget *parent, const char *title_name,
+	      double min_value, double max_value, double current,
+	      bool auto_enabled,
+	      void (*set_fn)(double),
+	      void (*set_auto_fn)(bool))
+{
+	GtkBuilder *builder = gtk_builder_new_from_resource(
+		"/org/postmarketos/Megapixels/controls-popover.ui");
+	GtkPopover *popover = GTK_POPOVER(gtk_builder_get_object(builder, "controls"));
+	GtkScale *scale = GTK_SCALE(gtk_builder_get_object(builder, "scale"));
+	GtkLabel *title = GTK_LABEL(gtk_builder_get_object(builder, "title"));
+	GtkLabel *value_label = GTK_LABEL(gtk_builder_get_object(builder, "value-label"));
+	GtkToggleButton *auto_button = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "auto-button"));
+
+	gtk_label_set_label(title, title_name);
+
+	GtkAdjustment *adjustment = gtk_range_get_adjustment(GTK_RANGE(scale));
+	gtk_adjustment_set_lower(adjustment, min_value);
+	gtk_adjustment_set_upper(adjustment, max_value);
+	gtk_adjustment_set_value(adjustment, current);
+	update_value(adjustment, value_label);
+
+	gtk_toggle_button_set_active(auto_button, auto_enabled);
+	update_scale(auto_button, scale);
+
+	g_signal_connect(adjustment, "value-changed", G_CALLBACK(on_controls_scale_changed), set_fn);
+	g_signal_connect(adjustment, "value-changed", G_CALLBACK(update_value), value_label);
+	g_signal_connect(auto_button, "toggled", G_CALLBACK(on_auto_controls_toggled), set_auto_fn);
+	g_signal_connect(auto_button, "toggled", G_CALLBACK(update_scale), scale);
+
+	gtk_widget_set_parent(GTK_WIDGET(popover), parent);
+	gtk_popover_popup(popover);
+	// g_object_unref(popover);
+}
+
+static void
+set_gain(double value)
+{
+	if (gain != (int)value) {
+		gain = value;
+		update_io_pipeline();
+	}
+}
+
+static void
+set_gain_auto(bool is_auto)
+{
+	if (gain_is_manual != !is_auto) {
+		gain_is_manual = !is_auto;
+		update_io_pipeline();
+	}
+}
+
+static void
+open_iso_controls(GtkWidget *button, gpointer user_data)
+{
+	open_controls(button, "ISO", 0, gain_max, gain, !gain_is_manual, set_gain, set_gain_auto);
+}
+
+static void
+set_shutter(double value)
+{
+	int new_exposure =
+		(int)(value / 360.0 * camera->capture_mode.height);
+	if (new_exposure != exposure) {
+		exposure = new_exposure;
+		update_io_pipeline();
+	}
+}
+
+static void
+set_shutter_auto(bool is_auto)
+{
+	if (exposure_is_manual != !is_auto) {
+		exposure_is_manual = !is_auto;
+		update_io_pipeline();
+	}
+}
+
+static void
+open_shutter_controls(GtkWidget *button, gpointer user_data)
+{
+	open_controls(button, "Shutter", 1.0, 360.0, exposure, !exposure_is_manual, set_shutter, set_shutter_auto);
+}
+
+/*
+static void
 on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 {
 	bool is_manual = gtk_toggle_button_get_active(widget) ? false : true;
@@ -737,7 +807,7 @@ on_control_auto_toggled(GtkToggleButton *widget, gpointer user_data)
 	}
 }
 
-void
+static void
 on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 {
 	double value = gtk_adjustment_get_value(widget);
@@ -767,6 +837,7 @@ on_control_slider_changed(GtkAdjustment *widget, gpointer user_data)
 		draw_controls();
 	}
 }
+*/
 
 static void
 on_realize(GtkWidget *window, gpointer *data)
@@ -778,10 +849,11 @@ on_realize(GtkWidget *window, gpointer *data)
 	update_io_pipeline();
 }
 
-static GSimpleAction *create_simple_action(GtkApplication *app, const char *name, GCallback callback)
+static GSimpleAction *
+create_simple_action(GtkApplication *app, const char *name, GCallback callback)
 {
 	GSimpleAction *action = g_simple_action_new(name, NULL);
-	g_signal_connect(action, "activate", callback, NULL);
+	g_signal_connect(action, "activate", callback, app);
 	g_action_map_add_action(G_ACTION_MAP(app), G_ACTION(action));
 	return action;
 }
@@ -807,27 +879,15 @@ activate(GtkApplication *app, gpointer data)
 		"/org/postmarketos/Megapixels/camera.ui");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-	GtkWidget *settings_back =
-		GTK_WIDGET(gtk_builder_get_object(builder, "settings_back"));
-	GtkWidget *error_close =
-		GTK_WIDGET(gtk_builder_get_object(builder, "error_close"));
+	GtkWidget *iso_button = GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
+	GtkWidget *shutter_button = GTK_WIDGET(gtk_builder_get_object(builder, "shutter-controls-button"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
-	error_box = GTK_WIDGET(gtk_builder_get_object(builder, "error_box"));
-	error_message = GTK_WIDGET(gtk_builder_get_object(builder, "error_message"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
 	open_last_stack = GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	process_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
-	control_box = GTK_WIDGET(gtk_builder_get_object(builder, "control_box"));
-	control_name = GTK_WIDGET(gtk_builder_get_object(builder, "control_name"));
-	control_slider =
-		GTK_ADJUSTMENT(gtk_builder_get_object(builder, "control_adj"));
-	control_auto = GTK_WIDGET(gtk_builder_get_object(builder, "control_auto"));
+
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
-	g_signal_connect(error_close, "clicked", G_CALLBACK(on_error_close_clicked),
-			 NULL);
-	g_signal_connect(settings_back, "clicked", G_CALLBACK(on_back_clicked),
-			 NULL);
 
 	g_signal_connect(preview, "realize", G_CALLBACK(preview_realize), NULL);
 	g_signal_connect(preview, "render", G_CALLBACK(preview_draw), NULL);
@@ -836,15 +896,14 @@ activate(GtkApplication *app, gpointer data)
 	g_signal_connect(click, "pressed", G_CALLBACK(preview_pressed), NULL);
 	gtk_widget_add_controller(preview, GTK_EVENT_CONTROLLER(click));
 
-	g_signal_connect(control_auto, "toggled",
-			 G_CALLBACK(on_control_auto_toggled), NULL);
-	g_signal_connect(control_slider, "value-changed",
-			 G_CALLBACK(on_control_slider_changed), NULL);
+	g_signal_connect(iso_button, "clicked", G_CALLBACK(open_iso_controls), NULL);
+	g_signal_connect(shutter_button, "clicked", G_CALLBACK(open_shutter_controls), NULL);
 
 	// Setup actions
 	create_simple_action(app, "capture", G_CALLBACK(run_capture_action));
 	create_simple_action(app, "camera-switch", G_CALLBACK(run_camera_switch_action));
 	create_simple_action(app, "open-settings", G_CALLBACK(run_open_settings_action));
+	create_simple_action(app, "close-settings", G_CALLBACK(run_close_settings_action));
 	create_simple_action(app, "open-last", G_CALLBACK(run_open_last_action));
 	create_simple_action(app, "open-photos", G_CALLBACK(run_open_photos_action));
 	create_simple_action(app, "quit", G_CALLBACK(run_quit_action));
