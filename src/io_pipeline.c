@@ -497,15 +497,15 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 				pipeline, info->camera, on_frame, NULL);
 
 			current_controls.gain_is_manual =
-				mp_camera_control_get_int32(
-					info->camera, V4L2_CID_EXPOSURE_AUTO) ==
-				V4L2_EXPOSURE_MANUAL;
+				mp_camera_control_get_bool(info->camera,
+							   V4L2_CID_AUTOGAIN) == 0;
 			current_controls.gain = mp_camera_control_get_int32(
 				info->camera, info->gain_ctrl);
 
 			current_controls.exposure_is_manual =
-				mp_camera_control_get_bool(info->camera,
-							   V4L2_CID_AUTOGAIN) == 0;
+				mp_camera_control_get_int32(
+					info->camera, V4L2_CID_EXPOSURE_AUTO) ==
+				V4L2_EXPOSURE_MANUAL;
 			current_controls.exposure = mp_camera_control_get_int32(
 				info->camera, V4L2_CID_EXPOSURE);
 		}
