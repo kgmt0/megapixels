@@ -3,7 +3,6 @@
 #include "ini.h"
 #include "config.h"
 #include "matrix.h"
-#include <wordexp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,17 +20,7 @@ static bool
 find_config(char *conffile)
 {
 	char buf[512];
-	char *xdg_config_home;
-	wordexp_t exp_result;
 	FILE *fp;
-
-	// Resolve XDG stuff
-	if ((xdg_config_home = getenv("XDG_CONFIG_HOME")) == NULL) {
-		xdg_config_home = "~/.config";
-	}
-	wordexp(xdg_config_home, &exp_result, 0);
-	xdg_config_home = strdup(exp_result.we_wordv[0]);
-	wordfree(&exp_result);
 
 	if (access("/proc/device-tree/compatible", F_OK) != -1) {
 		// Reads to compatible string of the current device tree, looks like:
@@ -48,7 +37,7 @@ find_config(char *conffile)
 		}
 
 		// Check for a config file in XDG_CONFIG_HOME
-		sprintf(conffile, "%s/megapixels/config/%s.ini", xdg_config_home,
+		sprintf(conffile, "%s/megapixels/config/%s.ini", g_get_user_config_dir (),
 			buf);
 		if (access(conffile, F_OK) != -1) {
 			printf("Found config file at %s\n", conffile);
