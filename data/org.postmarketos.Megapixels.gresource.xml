@@ -11,6 +11,8 @@
     <file preprocess="xml-stripblanks">shutter-symbolic.svg</file>
     <file>blit.vert</file>
     <file>blit.frag</file>
+    <file>solid.vert</file>
+    <file>solid.frag</file>
     <file>debayer.vert</file>
     <file>debayer.frag</file>
   </gresource>

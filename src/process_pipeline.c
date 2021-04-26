@@ -608,6 +608,9 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 	memcpy(image, buffer->data, size);
 	mp_io_pipeline_release_buffer(buffer->index);
 
+	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera->rotate, camera->mirrored);
+	mp_zbar_pipeline_process_image(mp_zbar_image_ref(zbar_image));
+
 	cairo_surface_t *thumb = process_image_for_preview(image);
 
 	if (captures_remaining > 0) {
@@ -626,7 +629,7 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 		assert(!thumb);
 	}
 
-	free(image);
+	mp_zbar_image_unref(zbar_image);
 
 	++frames_processed;
 	if (captures_remaining == 0) {

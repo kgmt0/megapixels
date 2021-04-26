@@ -54,7 +54,6 @@ static MPProcessPipelineBuffer *current_preview_buffer = NULL;
 static int preview_buffer_width = -1;
 static int preview_buffer_height = -1;
 
-static cairo_surface_t *status_surface = NULL;
 static char last_path[260] = "";
 
 static MPZBarScanResult *zbar_result = NULL;
@@ -67,10 +66,7 @@ GtkWidget *main_stack;
 GtkWidget *open_last_stack;
 GtkWidget *thumb_last;
 GtkWidget *process_spinner;
-GtkWidget *control_box;
-GtkWidget *control_name;
-GtkAdjustment *control_slider;
-GtkWidget *control_auto;
+GtkWidget *scanned_codes;
 
 int
 remap(int value, int input_min, int input_max, int output_min, int output_max)
@@ -241,95 +237,10 @@ mp_main_capture_completed(cairo_surface_t *thumb, const char *fname)
 				   (GSourceFunc)capture_completed, args, free);
 }
 
-static void
-draw_controls()
-{
-	// cairo_t *cr;
-	char iso[6];
-	int temp;
-	char shutterangle[6];
-
-	if (exposure_is_manual) {
-		temp = (int)((float)exposure / (float)camera->capture_mode.height *
-			     360);
-		sprintf(shutterangle, "%d\u00b0", temp);
-	} else {
-		sprintf(shutterangle, "auto");
-	}
-
-	if (gain_is_manual) {
-		temp = remap(gain - 1, 0, gain_max, camera->iso_min,
-			     camera->iso_max);
-		sprintf(iso, "%d", temp);
-	} else {
-		sprintf(iso, "auto");
-	}
-
-	if (status_surface)
-		cairo_surface_destroy(status_surface);
-
-	// Make a service to show status of controls, 32px high
-	// if (gtk_widget_get_window(preview) == NULL) {
-	// 	return;
-	// }
-	// status_surface =
-	// 	gdk_window_create_similar_surface(gtk_widget_get_window(preview),
-	// 					  CAIRO_CONTENT_COLOR_ALPHA,
-	// 					  preview_width, 32);
-
-	// cr = cairo_create(status_surface);
-	// cairo_set_source_rgba(cr, 0, 0, 0, 0.0);
-	// cairo_paint(cr);
-
-	// // Draw the outlines for the headings
-	// cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
-	// 		       CAIRO_FONT_WEIGHT_BOLD);
-	// cairo_set_font_size(cr, 9);
-	// cairo_set_source_rgba(cr, 0, 0, 0, 1);
-
-	// cairo_move_to(cr, 16, 16);
-	// cairo_text_path(cr, "ISO");
-	// cairo_stroke(cr);
-
-	// cairo_move_to(cr, 60, 16);
-	// cairo_text_path(cr, "Shutter");
-	// cairo_stroke(cr);
-
-	// // Draw the fill for the headings
-	// cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	// cairo_move_to(cr, 16, 16);
-	// cairo_show_text(cr, "ISO");
-	// cairo_move_to(cr, 60, 16);
-	// cairo_show_text(cr, "Shutter");
-
-	// // Draw the outlines for the values
-	// cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
-	// 		       CAIRO_FONT_WEIGHT_NORMAL);
-	// cairo_set_font_size(cr, 11);
-	// cairo_set_source_rgba(cr, 0, 0, 0, 1);
-
-	// cairo_move_to(cr, 16, 26);
-	// cairo_text_path(cr, iso);
-	// cairo_stroke(cr);
-
-	// cairo_move_to(cr, 60, 26);
-	// cairo_text_path(cr, shutterangle);
-	// cairo_stroke(cr);
-
-	// // Draw the fill for the values
-	// cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	// cairo_move_to(cr, 16, 26);
-	// cairo_show_text(cr, iso);
-	// cairo_move_to(cr, 60, 26);
-	// cairo_show_text(cr, shutterangle);
-
-	// cairo_destroy(cr);
-
-	// gtk_widget_queue_draw_area(preview, 0, 0, preview_width, 32);
-}
-
 static GLuint blit_program;
 static GLuint blit_uniform_texture;
+static GLuint solid_program;
+static GLuint solid_uniform_color;
 static GLuint quad;
 
 static void
@@ -361,7 +272,30 @@ preview_realize(GtkGLArea *area)
 
 	blit_uniform_texture = glGetUniformLocation(blit_program, "texture");
 
+	GLuint solid_shaders[] = {
+		gl_util_load_shader("/org/postmarketos/Megapixels/solid.vert", GL_VERTEX_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/solid.frag", GL_FRAGMENT_SHADER, NULL, 0),
+	};
+
+	solid_program = gl_util_link_program(solid_shaders, 2);
+	glBindAttribLocation(solid_program, GL_UTIL_VERTEX_ATTRIBUTE, "vert");
+	check_gl();
+
+	solid_uniform_color = glGetUniformLocation(solid_program, "color");
+
 	quad = gl_util_new_quad();
+}
+
+static void
+position_preview(float *offset_x, float *offset_y, float *size_x, float *size_y)
+{
+	double ratio = preview_buffer_height / (double)preview_buffer_width;
+
+	*offset_x = 0;
+	*offset_y = 0;
+	*size_x = preview_width;
+	*size_y = preview_width * ratio;
+
 }
 
 static gboolean
@@ -382,11 +316,12 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	double ratio = preview_buffer_height / (double)preview_buffer_width;
-	glViewport(0,
-		   preview_height - preview_width * ratio,
-		   preview_width,
-		   preview_width * ratio);
+	float offset_x, offset_y, size_x, size_y;
+	position_preview(&offset_x, &offset_y, &size_x, &size_y);
+	glViewport(offset_x,
+		   preview_height - size_y - offset_y,
+		   size_x,
+		   size_y);
 
 	if (current_preview_buffer) {
 		glUseProgram(blit_program);
@@ -400,50 +335,56 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 		gl_util_draw_quad(quad);
 	}
 
-	/*
-	// Clear preview area with black
-	cairo_paint(cr);
-
-	if (surface) {
-		// Draw camera preview
-		cairo_save(cr);
-
-		int width = cairo_image_surface_get_width(surface);
-		int height = cairo_image_surface_get_height(surface);
-		transform_centered(cr, preview_width, preview_height, width, height);
-
-		cairo_set_source_surface(cr, surface, 0, 0);
-		cairo_paint(cr);
-
-		// Draw zbar image
-		if (zbar_result) {
-			for (uint8_t i = 0; i < zbar_result->size; ++i) {
-				MPZBarCode *code = &zbar_result->codes[i];
-
-				cairo_set_line_width(cr, 3.0);
-				cairo_set_source_rgba(cr, 0, 0.5, 1, 0.75);
-				cairo_new_path(cr);
-				cairo_move_to(cr, code->bounds_x[0], code->bounds_y[0]);
-				for (uint8_t i = 0; i < 4; ++i) {
-					cairo_line_to(cr, code->bounds_x[i], code->bounds_y[i]);
-				}
-				cairo_close_path(cr);
-				cairo_stroke(cr);
-
-				cairo_save(cr);
-				cairo_translate(cr, code->bounds_x[0], code->bounds_y[0]);
-				cairo_show_text(cr, code->data);
-				cairo_restore(cr);
-			}
+	if (zbar_result) {
+		GLuint buffer;
+		if (!gtk_gl_area_get_use_es(area)) {
+			glGenBuffers(1, &buffer);
+			glBindBuffer(GL_ARRAY_BUFFER, buffer);
+			check_gl();
 		}
 
-		cairo_restore(cr);
-	}
+		glUseProgram(solid_program);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Draw control overlay
-	cairo_set_source_surface(cr, status_surface, 0, 0);
-	cairo_paint(cr);
-	*/
+		glUniform4f(solid_uniform_color, 1, 0, 0, 0.5);
+
+		for (uint8_t i = 0; i < zbar_result->size; ++i) {
+			MPZBarCode *code = &zbar_result->codes[i];
+
+			GLfloat vertices[] = {
+				code->bounds_x[0], code->bounds_y[0],
+				code->bounds_x[1], code->bounds_y[1],
+				code->bounds_x[3], code->bounds_y[3],
+				code->bounds_x[2], code->bounds_y[2],
+			};
+
+			for (int i = 0; i < 4; ++i) {
+				vertices[i * 2] = 2 * vertices[i * 2] / preview_buffer_width - 1.0;
+				vertices[i * 2 + 1] = 1.0 - 2 * vertices[i * 2 + 1] / preview_buffer_height;
+			}
+
+			if (gtk_gl_area_get_use_es(area)) {
+				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, 0, 0, vertices);
+				check_gl();
+				glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
+				check_gl();
+			} else {
+				glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
+				check_gl();
+
+				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
+				check_gl();
+			}
+
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			check_gl();
+		}
+
+		glDisable(GL_BLEND);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
 
 	glFlush();
 
@@ -462,8 +403,6 @@ preview_resize(GtkWidget *widget, int width, int height, gpointer data)
 		preview_height = height;
 		update_io_pipeline();
 	}
-
-	draw_controls();
 
 	return TRUE;
 }
@@ -508,110 +447,124 @@ run_quit_action(GSimpleAction *action, GVariant *param, GApplication *app)
 	g_application_quit(app);
 }
 
-// static bool
-// check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
-// {
-// 	bool right = false, left = false, top = false, bottom = false;
+static bool
+check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
+{
+	bool right = false, left = false, top = false, bottom = false;
 
-// 	for (int i = 0; i < 4; ++i) {
-// 		if (x <= bounds_x[i])
-// 			left = true;
-// 		if (x >= bounds_x[i])
-// 			right = true;
-// 		if (y <= bounds_y[i])
-// 			top = true;
-// 		if (y >= bounds_y[i])
-// 			bottom = true;
-// 	}
+	for (int i = 0; i < 4; ++i) {
+		if (x <= bounds_x[i])
+			left = true;
+		if (x >= bounds_x[i])
+			right = true;
+		if (y <= bounds_y[i])
+			top = true;
+		if (y >= bounds_y[i])
+			bottom = true;
+	}
 
-// 	return right && left && top && bottom;
-// }
+	return right && left && top && bottom;
+}
 
-// static void
-// on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
-// {
-// 	GtkWidget *dialog;
-// 	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
-// 	bool data_is_url = g_uri_is_valid(
-// 		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
+static void
+on_zbar_dialog_response(GtkDialog *dialog, int response, char *data)
+{
+	GError *error = NULL;
+	switch (response) {
+		case GTK_RESPONSE_YES:
+			if (!g_app_info_launch_default_for_uri(data,
+							       NULL, &error)) {
+				g_printerr("Could not launch application: %s\n",
+					   error->message);
+			}
+		case GTK_RESPONSE_ACCEPT:
+		{
+			GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
+			gdk_clipboard_set_text(
+				gdk_display_get_primary_clipboard(display),
+				data);
+		}
+		case GTK_RESPONSE_CANCEL:
+			break;
+		default:
+			g_printerr("Wrong dialog response: %d\n", response);
+	}
 
-// 	char* data = strdup(code->data);
+	g_free(data);
+	gtk_window_destroy(GTK_WINDOW(dialog));
+}
 
-// 	if (data_is_url) {
-// 		dialog = gtk_message_dialog_new(
-// 			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
-// 			flags,
-// 			GTK_MESSAGE_QUESTION,
-// 			GTK_BUTTONS_NONE,
-// 			"Found a URL '%s' encoded in a %s code.",
-// 			code->data,
-// 			code->type);
-// 		gtk_dialog_add_buttons(
-// 			GTK_DIALOG(dialog),
-// 			"_Open URL",
-// 			GTK_RESPONSE_YES,
-// 			NULL);
-// 	} else {
-// 		dialog = gtk_message_dialog_new(
-// 			GTK_WINDOW(gtk_widget_get_toplevel(widget)),
-// 			flags,
-// 			GTK_MESSAGE_QUESTION,
-// 			GTK_BUTTONS_NONE,
-// 			"Found '%s' encoded in a %s code.",
-// 			code->data,
-// 			code->type);
-// 	}
-// 	gtk_dialog_add_buttons(
-// 		GTK_DIALOG(dialog),
-// 		"_Copy",
-// 		GTK_RESPONSE_ACCEPT,
-// 		"_Cancel",
-// 		GTK_RESPONSE_CANCEL,
-// 		NULL);
+static void
+on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
+{
+	GtkWidget *dialog;
+	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
+	bool data_is_url = g_uri_is_valid(
+		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
 
-// 	int result = gtk_dialog_run(GTK_DIALOG(dialog));
+	char* data = strdup(code->data);
 
-// 	GError *error = NULL;
-// 	switch (result) {
-// 		case GTK_RESPONSE_YES:
-// 			if (!g_app_info_launch_default_for_uri(data,
-// 							       NULL, &error)) {
-// 				g_printerr("Could not launch application: %s\n",
-// 					   error->message);
-// 			}
-// 		case GTK_RESPONSE_ACCEPT:
-// 			gtk_clipboard_set_text(
-// 				gtk_clipboard_get(GDK_SELECTION_PRIMARY),
-// 				data, -1);
-// 		case GTK_RESPONSE_CANCEL:
-// 			break;
-// 		default:
-// 			g_printerr("Wrong dialog result: %d\n", result);
-// 	}
-// 	gtk_widget_destroy(dialog);
-// }
+	if (data_is_url) {
+		dialog = gtk_message_dialog_new(
+			GTK_WINDOW(gtk_widget_get_root(widget)),
+			flags,
+			GTK_MESSAGE_QUESTION,
+			GTK_BUTTONS_NONE,
+			"Found a URL '%s' encoded in a %s code.",
+			code->data,
+			code->type);
+		gtk_dialog_add_buttons(
+			GTK_DIALOG(dialog),
+			"_Open URL",
+			GTK_RESPONSE_YES,
+			NULL);
+	} else {
+		dialog = gtk_message_dialog_new(
+			GTK_WINDOW(gtk_widget_get_root(widget)),
+			flags,
+			GTK_MESSAGE_QUESTION,
+			GTK_BUTTONS_NONE,
+			"Found '%s' encoded in a %s code.",
+			code->data,
+			code->type);
+	}
+	gtk_dialog_add_buttons(
+		GTK_DIALOG(dialog),
+		"_Copy",
+		GTK_RESPONSE_ACCEPT,
+		"_Cancel",
+		GTK_RESPONSE_CANCEL,
+		NULL);
 
-void
+	g_signal_connect(dialog, "response", G_CALLBACK(on_zbar_dialog_response), data);
+
+	gtk_widget_show(GTK_WIDGET(dialog));
+}
+
+static void
 preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 {
+	GtkWidget *widget = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+
 	// Tapped zbar result
-	// if (zbar_result) {
-	// 	// Transform the event coordinates to the image
-	// 	int width = cairo_image_surface_get_width(surface);
-	// 	int height = cairo_image_surface_get_height(surface);
-	// 	double scale = MIN(preview_width / (double)width, preview_height / (double)height);
-	// 	int x = (event->x - preview_width / 2) / scale + width / 2;
-	// 	int y = (event->y - preview_height / 2) / scale + height / 2;
+	if (zbar_result) {
+		// Transform the event coordinates to the image
+		float offset_x, offset_y, size_x, size_y;
+		position_preview(&offset_x, &offset_y, &size_x, &size_y);
 
-	// 	for (uint8_t i = 0; i < zbar_result->size; ++i) {
-	// 		MPZBarCode *code = &zbar_result->codes[i];
+		double scale = preview_buffer_height / size_y;
+		int zbar_x = (x - offset_x) * scale;
+		int zbar_y = (y - offset_y) * scale;
 
-	// 		if (check_point_inside_bounds(x, y, code->bounds_x, code->bounds_y)) {
-	// 			on_zbar_code_tapped(widget, code);
-	// 			return;
-	// 		}
-	// 	}
-	// }
+		for (uint8_t i = 0; i < zbar_result->size; ++i) {
+			MPZBarCode *code = &zbar_result->codes[i];
+
+			if (check_point_inside_bounds(zbar_x, zbar_y, code->bounds_x, code->bounds_y)) {
+				on_zbar_code_tapped(widget, code);
+				return;
+			}
+		}
+	}
 
 	// Tapped preview image itself, try focussing
 	if (has_auto_focus_start) {
@@ -886,6 +839,7 @@ activate(GtkApplication *app, gpointer data)
 	open_last_stack = GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	process_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
+	scanned_codes = GTK_WIDGET(gtk_builder_get_object(builder, "scanned-codes"));
 
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 
