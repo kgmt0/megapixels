@@ -25,19 +25,19 @@
                 <child type="overlay">
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>
-                    <property name="vexpand">1</property>
-                    <property name="hexpand">1</property>
+                    <property name="halign">fill</property>
+                    <property name="valign">start</property>
                     <property name="spacing">5</property>
                     <property name="can-focus">0</property>
-                    <property name="margin-start">5</property>
-                    <property name="margin-end">5</property>
-                    <property name="margin-bottom">5</property>
-                    <property name="margin-top">5</property>
                     <child>
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>
                         <property name="hexpand">1</property>
                         <property name="valign">start</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
                         <property name="can-focus">0</property>
                         <property name="spacing">5</property>
                         <child>
@@ -64,6 +64,10 @@
                       <object class="GtkButton">
                         <property name="visible">0</property>
                         <property name="halign">start</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">horizontal</property>
@@ -85,87 +89,94 @@
                         </style>
                       </object>
                     </child>
+                    <style>
+                      <class name="button-overlay"/>
+                    </style>
+                  </object>
+                </child>
+                <child type="overlay">
+                  <object class="GtkBox">
+                    <property name="orientation">horizontal</property>
+                    <property name="halign">fill</property>
+                    <property name="valign">end</property>
                     <child>
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>
                         <property name="hexpand">1</property>
-                        <property name="vexpand">1</property>
                         <property name="valign">end</property>
-                        <property name="can-focus">0</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="spacing">5</property>
                         <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="hexpand">1</property>
-                            <property name="valign">end</property>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-settings</property>
+                            <property name="icon-name">settings-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.switch-camera</property>
+                            <property name="icon-name">switch-camera-symbolic</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="action-name">app.capture</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="pixel-size">60</property>
                             <property name="can-focus">0</property>
-                            <property name="spacing">5</property>
+                            <property name="icon-name">shutter-button-symbolic</property>
+                          </object>
+                        </child>
+                        <style>
+                          <class name="circular"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="hexpand">1</property>
+                        <property name="halign">end</property>
+                        <property name="valign">end</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-last</property>
                             <child>
-                              <object class="GtkButton">
-                                <property name="action-name">app.open-settings</property>
-                                <property name="icon-name">settings-symbolic</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkButton">
-                                <property name="action-name">app.switch-camera</property>
-                                <property name="icon-name">switch-camera-symbolic</property>
+                              <object class="GtkStack" id="open_last_stack">
+                                <property name="can-focus">0</property>
+                                <child>
+                                  <object class="GtkImage" id="thumb_last">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinner" id="process_spinner">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>
                         </child>
                         <child>
                           <object class="GtkButton">
-                            <property name="action-name">app.capture</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="pixel-size">60</property>
-                                <property name="can-focus">0</property>
-                                <property name="icon-name">shutter-button-symbolic</property>
-                              </object>
-                            </child>
-                            <style>
-                              <class name="circular"/>
-                            </style>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="hexpand">1</property>
-                            <property name="halign">end</property>
-                            <property name="valign">end</property>
-                            <property name="can-focus">0</property>
-                            <property name="spacing">5</property>
-                            <child>
-                              <object class="GtkButton">
-                                <property name="action-name">app.open-last</property>
-                                <child>
-                                  <object class="GtkStack" id="open_last_stack">
-                                    <property name="can-focus">0</property>
-                                    <child>
-                                      <object class="GtkImage" id="thumb_last">
-                                        <property name="width-request">24</property>
-                                        <property name="height-request">24</property>
-                                        <property name="can-focus">0</property>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkSpinner" id="process_spinner">
-                                        <property name="width-request">24</property>
-                                        <property name="height-request">24</property>
-                                        <property name="can-focus">0</property>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkButton">
-                                <property name="action-name">app.open-photos</property>
-                                <property name="icon-name">folder-symbolic</property>
-                              </object>
-                            </child>
+                            <property name="action-name">app.open-photos</property>
+                            <property name="icon-name">folder-symbolic</property>
                           </object>
                         </child>
                       </object>

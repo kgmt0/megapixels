@@ -545,6 +545,7 @@ static void
 preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 {
 	GtkWidget *widget = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+	int scale_factor = gtk_widget_get_scale_factor(widget);
 
 	// Tapped zbar result
 	if (zbar_result) {
@@ -552,9 +553,8 @@ preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 		float offset_x, offset_y, size_x, size_y;
 		position_preview(&offset_x, &offset_y, &size_x, &size_y);
 
-		double scale = preview_buffer_height / size_y;
-		int zbar_x = (x - offset_x) * scale;
-		int zbar_y = (y - offset_y) * scale;
+		int zbar_x = (x - offset_x) * scale_factor / size_x * preview_buffer_width;
+		int zbar_y = (y - offset_y) * scale_factor / size_y * preview_buffer_height;
 
 		for (uint8_t i = 0; i < zbar_result->size; ++i) {
 			MPZBarCode *code = &zbar_result->codes[i];

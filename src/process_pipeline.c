@@ -255,7 +255,9 @@ mp_process_pipeline_init_gl(GdkSurface *surface)
 static cairo_surface_t *
 process_image_for_preview(const uint8_t *image)
 {
+#ifdef PROFILE_DEBAYER
 	clock_t t1 = clock();
+#endif
 
 	// Pick an available buffer
 	MPProcessPipelineBuffer *output_buffer = NULL;
@@ -293,8 +295,10 @@ process_image_for_preview(const uint8_t *image)
 
 	glDeleteTextures(1, &input_texture);
 
+#ifdef PROFILE_DEBAYER
 	clock_t t2 = clock();
 	printf("%fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
+#endif
 
 	// {
 	// 	glBindTexture(GL_TEXTURE_2D, textures[1]);
