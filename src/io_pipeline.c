@@ -185,6 +185,12 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 
 		info->camera = mp_camera_new(dev_info->video_fd, info->fd);
 
+		// Start with the capture format, this works around a bug with
+		// the ov5640 driver where it won't allow setting the preview
+		// format initially.
+		MPCameraMode mode = config->capture_mode;
+		mp_camera_set_mode(info->camera, &mode);
+
 		// Trigger continuous auto focus if the sensor supports it
 		if (mp_camera_query_control(info->camera, V4L2_CID_FOCUS_AUTO,
 					    NULL)) {
