@@ -496,7 +496,7 @@ on_zbar_dialog_response(GtkDialog *dialog, int response, char *data)
 		{
 			GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
 			gdk_clipboard_set_text(
-				gdk_display_get_primary_clipboard(display),
+				gdk_display_get_clipboard(display),
 				data);
 		}
 		case GTK_RESPONSE_CANCEL:
