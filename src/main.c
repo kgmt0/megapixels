@@ -182,34 +182,8 @@ mp_main_set_preview(MPProcessPipelineBuffer *buffer)
 				   (GSourceFunc)set_preview, buffer, NULL);
 }
 
-static void transform_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
-	                       int src_width, int src_height)
-{
-	cairo_translate(cr, dst_width / 2, dst_height / 2);
-
-	double scale = MIN(dst_width / (double)src_width, dst_height / (double)src_height);
-	cairo_scale(cr, scale, scale);
-
-	cairo_translate(cr, -src_width / 2, -src_height / 2);
-}
-
-void
-draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
-			     cairo_surface_t *surface)
-{
-	cairo_save(cr);
-
-	int width = cairo_image_surface_get_width(surface);
-	int height = cairo_image_surface_get_height(surface);
-	transform_centered(cr, dst_width, dst_height, width, height);
-
-	cairo_set_source_surface(cr, surface, 0, 0);
-	cairo_paint(cr);
-	cairo_restore(cr);
-}
-
 struct capture_completed_args {
-	cairo_surface_t *thumb;
+	GdkTexture *thumb;
 	char *fname;
 };
 
@@ -218,19 +192,20 @@ capture_completed(struct capture_completed_args *args)
 {
 	strncpy(last_path, args->fname, 259);
 
-	// gtk_image_set_from_surface(GTK_IMAGE(thumb_last), args->thumb);
+	gtk_image_set_from_paintable(GTK_IMAGE(thumb_last),
+				     GDK_PAINTABLE(args->thumb));
 
 	gtk_spinner_stop(GTK_SPINNER(process_spinner));
 	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), thumb_last);
 
-	cairo_surface_destroy(args->thumb);
+	g_object_unref(args->thumb);
 	g_free(args->fname);
 
 	return false;
 }
 
 void
-mp_main_capture_completed(cairo_surface_t *thumb, const char *fname)
+mp_main_capture_completed(GdkTexture *thumb, const char *fname)
 {
 	struct capture_completed_args *args = malloc(sizeof(struct capture_completed_args));
 	args->thumb = thumb;

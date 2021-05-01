@@ -311,6 +311,7 @@ capture(MPPipeline *pipeline, const void *data)
 				    V4L2_EXPOSURE_MANUAL);
 
 	// Change camera mode for capturing
+	mp_process_pipeline_sync();
 	mp_camera_stop_capture(info->camera);
 
 	mode = camera->capture_mode;
@@ -448,6 +449,7 @@ on_frame(MPBuffer buffer, void * _data)
 			}
 
 			// Go back to preview mode
+			mp_process_pipeline_sync();
 			mp_camera_stop_capture(info->camera);
 
 			mode = camera->preview_mode;

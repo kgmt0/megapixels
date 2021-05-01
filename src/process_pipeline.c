@@ -40,6 +40,9 @@ static int captures_remaining = 0;
 static int preview_width;
 static int preview_height;
 
+static int output_buffer_width = -1;
+static int output_buffer_height = -1;
+
 // static bool gain_is_manual;
 static int gain;
 static int gain_max;
@@ -252,7 +255,7 @@ mp_process_pipeline_init_gl(GdkSurface *surface)
 	mp_pipeline_invoke(pipeline, (MPPipelineCallback) init_gl, &surface, sizeof(GdkSurface *));
 }
 
-static cairo_surface_t *
+static GdkTexture *
 process_image_for_preview(const uint8_t *image)
 {
 #ifdef PROFILE_DEBAYER
@@ -300,55 +303,6 @@ process_image_for_preview(const uint8_t *image)
 	printf("%fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
 #endif
 
-	// {
-	// 	glBindTexture(GL_TEXTURE_2D, textures[1]);
-	// 	EGLImage egl_image = eglCreateImage(egl_display, egl_context, EGL_GL_TEXTURE_2D, (EGLClientBuffer)(size_t)textures[1], NULL);
-
-	// 	// Make sure it's in the expected format
-	// 	int fourcc;
-	// 	eglExportDMABUFImageQueryMESA(egl_display, egl_image, &fourcc, NULL, NULL);
-	// 	assert(fourcc == DRM_FORMAT_ABGR8888);
-
-
-	// 	int dmabuf_fd;
-	// 	int stride, offset;
-	// 	eglExportDMABUFImageMESA(egl_display, egl_image, &dmabuf_fd, &stride, &offset);
-
-	// 	int fsize = lseek(dmabuf_fd, 0, SEEK_END);
-	// 	printf("SIZE %d STRIDE %d OFFSET %d SIZE %d:%d\n", fsize, stride, offset, preview_width, preview_height);
-
-	// 	size_t size = stride * preview_height;
-	// 	uint32_t *data = mmap(NULL, fsize, PROT_READ, MAP_SHARED, dmabuf_fd, 0);
-	// 	assert(data != MAP_FAILED);
-
-	// 	int pixel_stride = stride / 4;
-
-	// 	for (size_t y = 0; y < preview_height; ++y) {
-	// 		for (size_t x = 0; x < preview_width; ++x) {
-	// 			uint32_t p = data[x + y * pixel_stride];
-	// 			pixels[x + y * preview_width] = p;
-	// 		// 	uint16_t p = data[x + y * stride];
-	// 		// 	uint32_t r = (p & 0b11111);
-	// 		// 	uint32_t g = ((p >> 5) & 0b11111);
-	// 		// 	uint32_t b = ((p >> 10) & 0b11111);
-	// 		// 	pixels[x + y * preview_width] = (r << 16) | (g << 8) | b;
-	// 		}
-	// 		// memcpy(pixels + preview_width * y, data + stride * y, preview_width * sizeof(uint32_t));
-	// 	}
-
-	// 	{
-	// 		FILE *f = fopen("test.raw", "w");
-	// 		fwrite(data, fsize, 1, f);
-	// 		fclose(f);
-	// 	}
-
-	// 	// memcpy(pixels, data, size);
-	// 	munmap(data, size);
-	// 	close(dmabuf_fd);
-	// }
-	// glReadPixels(0, 0, preview_width, preview_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	// check_gl();
-
 #ifdef RENDERDOC
 	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 #endif
@@ -357,20 +311,33 @@ process_image_for_preview(const uint8_t *image)
 	mp_main_set_preview(output_buffer);
 
 	// Create a thumbnail from the preview for the last capture
-	cairo_surface_t *thumb = NULL;
-	// if (captures_remaining == 1) {
-	// 	printf("Making thumbnail\n");
-	// 	thumb = cairo_image_surface_create(
-	// 		CAIRO_FORMAT_ARGB32, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE);
+	GdkTexture *thumb = NULL;
+	if (captures_remaining == 1) {
+		printf("Making thumbnail\n");
 
-	// 	cairo_t *cr = cairo_create(thumb);
-	// 	draw_surface_scaled_centered(
-	// 		cr, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE, surface);
-	// 	cairo_destroy(cr);
-	// }
+		size_t size = output_buffer_width * output_buffer_height * sizeof(uint32_t);
 
-	// Pass processed preview to main and zbar
-	// mp_zbar_pipeline_process_image(cairo_surface_reference(surface));
+		uint32_t *data = g_malloc_n(size, 1);
+
+		glReadPixels(0, 0, output_buffer_width, output_buffer_height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		check_gl();
+
+		// Flip vertically
+		for (size_t y = 0; y < output_buffer_height / 2; ++y) {
+			for (size_t x = 0; x < output_buffer_width; ++x) {
+				uint32_t tmp = data[(output_buffer_height - y - 1) * output_buffer_width + x];
+				data[(output_buffer_height - y - 1) * output_buffer_width + x] = data[y * output_buffer_width + x];
+				data[y * output_buffer_width + x] = tmp;
+			}
+		}
+
+		thumb = gdk_memory_texture_new(
+			output_buffer_width,
+			output_buffer_height,
+			GDK_MEMORY_R8G8B8A8,
+			g_bytes_new_take(data, size),
+			output_buffer_width * sizeof(uint32_t));
+	}
 
 	return thumb;
 }
@@ -527,7 +494,7 @@ process_image_for_capture(const uint8_t *image, int count)
 }
 
 static void
-post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thumb)
+post_process_finished(GSubprocess *proc, GAsyncResult *res, GdkTexture *thumb)
 {
 	char *stdout;
 	g_subprocess_communicate_utf8_finish(proc, res, &stdout, NULL, NULL);
@@ -550,7 +517,7 @@ post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thu
 }
 
 static void
-process_capture_burst(cairo_surface_t *thumb)
+process_capture_burst(GdkTexture *thumb)
 {
 	time_t rawtime;
 	time(&rawtime);
@@ -615,7 +582,7 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera->rotate, camera->mirrored);
 	mp_zbar_pipeline_process_image(mp_zbar_image_ref(zbar_image));
 
-	cairo_surface_t *thumb = process_image_for_preview(image);
+	GdkTexture *thumb = process_image_for_preview(image);
 
 	if (captures_remaining > 0) {
 		int count = burst_length - captures_remaining;
@@ -646,7 +613,6 @@ mp_process_pipeline_process_image(MPBuffer buffer)
 {
 	// If we haven't processed the previous frame yet, drop this one
 	if (frames_received != frames_processed && !is_capturing) {
-		printf("Dropped frame at capture\n");
 		mp_io_pipeline_release_buffer(buffer.index);
 		return;
 	}
@@ -681,9 +647,6 @@ mp_process_pipeline_capture()
 
 	mp_pipeline_invoke(pipeline, capture, NULL, 0);
 }
-
-static int output_buffer_width = -1;
-static int output_buffer_height = -1;
 
 static void
 on_output_changed()
