@@ -300,7 +300,7 @@ process_image_for_preview(const uint8_t *image)
 
 #ifdef PROFILE_DEBAYER
 	clock_t t2 = clock();
-	printf("%fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
+	printf("process_image_for_preview %fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
 #endif
 
 #ifdef RENDERDOC
@@ -572,6 +572,10 @@ process_capture_burst(GdkTexture *thumb)
 static void
 process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 {
+#ifdef PROFILE_PROCESS
+	clock_t t1 = clock();
+#endif
+
 	size_t size =
 		mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) *
 		mode.height;
@@ -581,6 +585,10 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 
 	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera->rotate, camera->mirrored);
 	mp_zbar_pipeline_process_image(mp_zbar_image_ref(zbar_image));
+
+#ifdef PROFILE_PROCESS
+	clock_t t2 = clock();
+#endif
 
 	GdkTexture *thumb = process_image_for_preview(image);
 
@@ -606,6 +614,14 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 	if (captures_remaining == 0) {
 		is_capturing = false;
 	}
+
+#ifdef PROFILE_PROCESS
+	clock_t t3 = clock();
+	printf("process_image %fms, step 1:%fms, step 2:%fms\n",
+	       (float)(t3 - t1) / CLOCKS_PER_SEC * 1000,
+	       (float)(t2 - t1) / CLOCKS_PER_SEC * 1000,
+	       (float)(t3 - t2) / CLOCKS_PER_SEC * 1000);
+#endif
 }
 
 void
@@ -723,5 +739,5 @@ mp_process_pipeline_update_state(const struct mp_process_pipeline_state *new_sta
 			   sizeof(struct mp_process_pipeline_state));
 }
 
-// FUCK YOU GTK
+// GTK4 seems to require this
 void pango_fc_font_get_languages() {}
