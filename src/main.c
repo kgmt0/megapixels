@@ -67,6 +67,8 @@ GtkWidget *open_last_stack;
 GtkWidget *thumb_last;
 GtkWidget *process_spinner;
 GtkWidget *scanned_codes;
+GtkWidget *preview_top_box;
+GtkWidget *preview_bottom_box;
 
 int
 remap(int value, int input_min, int input_max, int output_min, int output_max)
@@ -289,12 +291,23 @@ preview_realize(GtkGLArea *area)
 static void
 position_preview(float *offset_x, float *offset_y, float *size_x, float *size_y)
 {
+	int scale = gtk_widget_get_scale_factor(preview);
+	int preview_height = gtk_widget_get_allocated_height(preview) * scale;
+	int top_height = gtk_widget_get_allocated_height(preview_top_box) * scale;
+	int bottom_height = gtk_widget_get_allocated_height(preview_bottom_box) * scale;
+	int inner_height = preview_height - top_height - bottom_height;
+
 	double ratio = preview_buffer_height / (double)preview_buffer_width;
 
 	*offset_x = 0;
-	*offset_y = 0;
 	*size_x = preview_width;
 	*size_y = preview_width * ratio;
+
+	if (*size_y > inner_height) {
+		*offset_y = (preview_height - *size_y) / 2.0;
+	} else {
+		*offset_y = top_height + (inner_height - *size_y) / 2.0;
+	}
 
 }
 
@@ -760,6 +773,8 @@ activate(GtkApplication *app, gpointer data)
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
 	process_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
 	scanned_codes = GTK_WIDGET(gtk_builder_get_object(builder, "scanned-codes"));
+	preview_top_box = GTK_WIDGET(gtk_builder_get_object(builder, "top-box"));
+	preview_bottom_box = GTK_WIDGET(gtk_builder_get_object(builder, "bottom-box"));
 
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 
@@ -775,7 +790,7 @@ activate(GtkApplication *app, gpointer data)
 
 	// Setup actions
 	create_simple_action(app, "capture", G_CALLBACK(run_capture_action));
-	create_simple_action(app, "camera-switch", G_CALLBACK(run_camera_switch_action));
+	create_simple_action(app, "switch-camera", G_CALLBACK(run_camera_switch_action));
 	create_simple_action(app, "open-settings", G_CALLBACK(run_open_settings_action));
 	create_simple_action(app, "close-settings", G_CALLBACK(run_close_settings_action));
 	create_simple_action(app, "open-last", G_CALLBACK(run_open_last_action));

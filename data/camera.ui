@@ -23,7 +23,7 @@
                   </object>
                 </child>
                 <child type="overlay">
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="top-box">
                     <property name="orientation">vertical</property>
                     <property name="halign">fill</property>
                     <property name="valign">start</property>
@@ -95,7 +95,7 @@
                   </object>
                 </child>
                 <child type="overlay">
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="bottom-box">
                     <property name="orientation">horizontal</property>
                     <property name="halign">fill</property>
                     <property name="valign">end</property>
