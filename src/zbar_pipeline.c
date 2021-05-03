@@ -6,6 +6,17 @@
 #include <zbar.h>
 #include <assert.h>
 
+struct _MPZBarImage {
+	uint8_t *data;
+	MPPixelFormat pixel_format;
+	int width;
+	int height;
+	int rotation;
+	bool mirrored;
+
+	_Atomic int ref_count;
+};
+
 static MPPipeline *pipeline;
 
 static volatile int frames_processed = 0;
@@ -33,7 +44,8 @@ mp_zbar_pipeline_stop()
 	mp_pipeline_free(pipeline);
 }
 
-static bool is_3d_code(zbar_symbol_type_t type)
+static bool
+is_3d_code(zbar_symbol_type_t type)
 {
 	switch (type) {
 		case ZBAR_EAN2:
@@ -62,9 +74,41 @@ static bool is_3d_code(zbar_symbol_type_t type)
 	}
 }
 
-static MPZBarCode
-process_symbol(const zbar_symbol_t *symbol)
+static inline void
+map_coords(int *x, int *y, int width, int height, int rotation, bool mirrored)
 {
+	int x_r, y_r;
+	if (rotation == 0) {
+		x_r = *x;
+		y_r = *y;
+	} else if (rotation == 90) {
+		x_r = *y;
+		y_r = height - *x - 1;
+	} else if (rotation == 270) {
+		x_r = width - *y - 1;
+		y_r = *x;
+	} else {
+		x_r = width - *x - 1;
+		y_r = height - *y - 1;
+	}
+
+	if (mirrored) {
+		x_r = width - x_r - 1;
+	}
+
+	*x = x_r;
+	*y = y_r;
+}
+
+static MPZBarCode
+process_symbol(const MPZBarImage *image, int width, int height, const zbar_symbol_t *symbol)
+{
+	if (image->rotation == 90 || image->rotation == 270) {
+		int tmp = width;
+		width = height;
+		height = tmp;
+	}
+
 	MPZBarCode code;
 
 	unsigned loc_size = zbar_symbol_get_loc_size(symbol);
@@ -100,6 +144,10 @@ process_symbol(const zbar_symbol_t *symbol)
 		code.bounds_y[3] = max_y;
 	}
 
+	for (uint8_t i = 0; i < 4; ++i) {
+		map_coords(&code.bounds_x[i], &code.bounds_y[i], width, height, image->rotation, image->mirrored);
+	}
+
 	const char *data = zbar_symbol_get_data(symbol);
 	unsigned int data_size = zbar_symbol_get_data_length(symbol);
 	code.type = zbar_get_symbol_name(type);
@@ -110,25 +158,33 @@ process_symbol(const zbar_symbol_t *symbol)
 }
 
 static void
-process_surface(MPPipeline *pipeline, cairo_surface_t **_surface)
+process_image(MPPipeline *pipeline, MPZBarImage **_image)
 {
-	cairo_surface_t *surface = *_surface;
+	MPZBarImage *image = *_image;
 
-	int width = cairo_image_surface_get_width(surface);
-	int height = cairo_image_surface_get_height(surface);
-	const uint32_t *surface_data = (const uint32_t *)cairo_image_surface_get_data(surface);
+	assert(image->pixel_format == MP_PIXEL_FMT_BGGR8
+	       || image->pixel_format == MP_PIXEL_FMT_GBRG8
+	       || image->pixel_format == MP_PIXEL_FMT_GRBG8
+	       || image->pixel_format == MP_PIXEL_FMT_RGGB8);
 
-	// Create a grayscale image for scanning from the current preview
+	// Create a grayscale image for scanning from the current preview.
+	// Rotate/mirror correctly.
+	int width = image->width / 2;
+	int height = image->height / 2;
+
 	uint8_t *data = malloc(width * height * sizeof(uint8_t));
-	for (size_t i = 0; i < width * height; ++i) {
-		data[i] = (surface_data[i] >> 16) & 0xff;
+	size_t i = 0;
+	for (int y = 0; y < image->height; y += 2) {
+		for (int x = 0; x < image->width; x += 2) {
+			data[++i] = image->data[x + image->width * y];
+		}
 	}
 
 	// Create image for zbar
 	zbar_image_t *zbar_image = zbar_image_create();
 	zbar_image_set_format(zbar_image, zbar_fourcc('Y', '8', '0', '0'));
 	zbar_image_set_size(zbar_image, width, height);
-	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t), zbar_image_free_data);
+	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t), NULL);
 
 	int res = zbar_scan_image(scanner, zbar_image);
 	assert(res >= 0);
@@ -140,7 +196,7 @@ process_surface(MPPipeline *pipeline, cairo_surface_t **_surface)
 		const zbar_symbol_t *symbol = zbar_image_first_symbol(zbar_image);
 		for (int i = 0; i < MIN(res, 8); ++i) {
 			assert(symbol != NULL);
-			result->codes[i] = process_symbol(symbol);
+			result->codes[i] = process_symbol(image, width, height, symbol);
 			symbol = zbar_symbol_next(symbol);
 		}
 
@@ -150,22 +206,57 @@ process_surface(MPPipeline *pipeline, cairo_surface_t **_surface)
 	}
 
 	zbar_image_destroy(zbar_image);
-	cairo_surface_destroy(surface);
+	mp_zbar_image_unref(image);
 
 	++frames_processed;
 }
 
 void
-mp_zbar_pipeline_process_image(cairo_surface_t *surface)
+mp_zbar_pipeline_process_image(MPZBarImage *image)
 {
 	// If we haven't processed the previous frame yet, drop this one
 	if (frames_received != frames_processed) {
-		cairo_surface_destroy(surface);
+		mp_zbar_image_unref(image);
 		return;
 	}
 
 	++frames_received;
 
-	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_surface, &surface,
-			   sizeof(cairo_surface_t *));
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_image, &image,
+			   sizeof(MPZBarImage *));
+}
+
+MPZBarImage *
+mp_zbar_image_new(uint8_t *data,
+		  MPPixelFormat pixel_format,
+		  int width,
+		  int height,
+		  int rotation,
+		  bool mirrored)
+{
+	MPZBarImage *image = malloc(sizeof(MPZBarImage));
+	image->data = data;
+	image->pixel_format = pixel_format;
+	image->width = width;
+	image->height = height;
+	image->rotation = rotation;
+	image->mirrored = mirrored;
+	image->ref_count = 1;
+	return image;
+}
+
+MPZBarImage *
+mp_zbar_image_ref(MPZBarImage *image)
+{
+	++image->ref_count;
+	return image;
+}
+
+void
+mp_zbar_image_unref(MPZBarImage *image)
+{
+	if (--image->ref_count == 0) {
+		free(image->data);
+		free(image);
+	}
 }

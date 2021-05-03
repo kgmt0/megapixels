@@ -2,14 +2,17 @@
 
 #include "pipeline.h"
 #include "zbar_pipeline.h"
+#include "io_pipeline.h"
 #include "main.h"
 #include "config.h"
-#include "quickpreview.h"
+#include "gles2_debayer.h"
 #include <tiffio.h>
 #include <assert.h>
 #include <math.h>
-#include <wordexp.h>
 #include <gtk/gtk.h>
+
+#include "gl_util.h"
+#include <sys/mman.h>
 
 #define TIFFTAG_FORWARDMATRIX1 50964
 
@@ -26,6 +29,7 @@ static volatile int frames_processed = 0;
 static volatile int frames_received = 0;
 
 static const struct mp_camera_config *camera;
+static int camera_rotation;
 
 static MPCameraMode mode;
 
@@ -34,6 +38,11 @@ static int captures_remaining = 0;
 
 static int preview_width;
 static int preview_height;
+
+static int device_rotation;
+
+static int output_buffer_width = -1;
+static int output_buffer_height = -1;
 
 // static bool gain_is_manual;
 static int gain;
@@ -60,28 +69,18 @@ register_custom_tiff_tags(TIFF *tif)
 static bool
 find_processor(char *script)
 {
-	char *xdg_config_home;
 	char filename[] = "postprocess.sh";
-	wordexp_t exp_result;
 
-	// Resolve XDG stuff
-	if ((xdg_config_home = getenv("XDG_CONFIG_HOME")) == NULL) {
-		xdg_config_home = "~/.config";
-	}
-	wordexp(xdg_config_home, &exp_result, 0);
-	xdg_config_home = strdup(exp_result.we_wordv[0]);
-	wordfree(&exp_result);
-
-	// Check postprocess.h in the current working directory
-	sprintf(script, "%s", filename);
+	// Check postprocess.sh in the current working directory
+	sprintf(script, "./data/%s", filename);
 	if (access(script, F_OK) != -1) {
-		sprintf(script, "./%s", filename);
+		sprintf(script, "./data/%s", filename);
 		printf("Found postprocessor script at %s\n", script);
 		return true;
 	}
 
 	// Check for a script in XDG_CONFIG_HOME
-	sprintf(script, "%s/megapixels/%s", xdg_config_home, filename);
+	sprintf(script, "%s/megapixels/%s", g_get_user_config_dir(), filename);
 	if (access(script, F_OK) != -1) {
 		printf("Found postprocessor script at %s\n", script);
 		return true;
@@ -134,47 +133,208 @@ mp_process_pipeline_stop()
 	mp_zbar_pipeline_stop();
 }
 
-static cairo_surface_t *
-process_image_for_preview(const MPImage *image)
+void
+mp_process_pipeline_sync()
 {
-	uint32_t surface_width, surface_height, skip;
-	quick_preview_size(&surface_width, &surface_height, &skip, preview_width,
-			   preview_height, image->width, image->height,
-			   image->pixel_format, camera->rotate);
+	mp_pipeline_sync(pipeline);
+}
 
-	cairo_surface_t *surface = cairo_image_surface_create(
-		CAIRO_FORMAT_RGB24, surface_width, surface_height);
+#define NUM_BUFFERS 4
 
-	uint8_t *pixels = cairo_image_surface_get_data(surface);
+struct _MPProcessPipelineBuffer {
+	GLuint texture_id;
 
-	quick_preview((uint32_t *)pixels, surface_width, surface_height, image->data,
-		      image->width, image->height, image->pixel_format,
-		      camera->rotate, camera->mirrored,
-		      camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
-		      camera->blacklevel, skip);
+	_Atomic(int) refcount;
+};
+static MPProcessPipelineBuffer output_buffers[NUM_BUFFERS];
 
-	// Create a thumbnail from the preview for the last capture
-	cairo_surface_t *thumb = NULL;
-	if (captures_remaining == 1) {
-		printf("Making thumbnail\n");
-		thumb = cairo_image_surface_create(
-			CAIRO_FORMAT_ARGB32, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE);
+void
+mp_process_pipeline_buffer_ref(MPProcessPipelineBuffer *buf)
+{
+	++buf->refcount;
+}
 
-		cairo_t *cr = cairo_create(thumb);
-		draw_surface_scaled_centered(
-			cr, MP_MAIN_THUMB_SIZE, MP_MAIN_THUMB_SIZE, surface);
-		cairo_destroy(cr);
+void
+mp_process_pipeline_buffer_unref(MPProcessPipelineBuffer *buf)
+{
+	--buf->refcount;
+}
+
+uint32_t
+mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf)
+{
+	return buf->texture_id;
+}
+
+static GLES2Debayer *gles2_debayer = NULL;
+
+static GdkGLContext *context;
+
+#define RENDERDOC
+
+#ifdef RENDERDOC
+#include <renderdoc/app.h>
+extern RENDERDOC_API_1_1_2 *rdoc_api;
+#endif
+
+static void
+init_gl(MPPipeline *pipeline, GdkSurface **surface)
+{
+	GError *error = NULL;
+	context = gdk_surface_create_gl_context(*surface, &error);
+	if (context == NULL) {
+		printf("Failed to initialize OpenGL context: %s\n", error->message);
+		g_clear_error(&error);
+		return;
 	}
 
-	// Pass processed preview to main and zbar
-	mp_zbar_pipeline_process_image(cairo_surface_reference(surface));
-	mp_main_set_preview(surface);
+	gdk_gl_context_set_use_es(context, true);
+	gdk_gl_context_set_required_version(context, 2, 0);
+	gdk_gl_context_set_forward_compatible(context, false);
+#ifdef DEBUG
+	gdk_gl_context_set_debug_enabled(context, true);
+#else
+	gdk_gl_context_set_debug_enabled(context, false);
+#endif
+
+	gdk_gl_context_realize(context, &error);
+	if (error != NULL) {
+		printf("Failed to create OpenGL context: %s\n", error->message);
+		g_clear_object(&context);
+		g_clear_error(&error);
+		return;
+	}
+
+	gdk_gl_context_make_current(context);
+	check_gl();
+
+	// Make a VAO for OpenGL
+	if (!gdk_gl_context_get_use_es(context)) {
+		GLuint vao;
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
+		check_gl();
+	}
+
+	gles2_debayer = gles2_debayer_new(MP_PIXEL_FMT_BGGR8);
+	check_gl();
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	check_gl();
+
+	gles2_debayer_use(gles2_debayer);
+
+	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+		glGenTextures(1, &output_buffers[i].texture_id);
+		glBindTexture(GL_TEXTURE_2D, output_buffers[i].texture_id);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	gboolean is_es = gdk_gl_context_get_use_es(context);
+	int major, minor;
+	gdk_gl_context_get_version(context, &major, &minor);
+
+	printf("Initialized %s %d.%d\n", is_es ? "OpenGL ES" : "OpenGL", major, minor);
+}
+
+void
+mp_process_pipeline_init_gl(GdkSurface *surface)
+{
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback) init_gl, &surface, sizeof(GdkSurface *));
+}
+
+static GdkTexture *
+process_image_for_preview(const uint8_t *image)
+{
+#ifdef PROFILE_DEBAYER
+	clock_t t1 = clock();
+#endif
+
+	// Pick an available buffer
+	MPProcessPipelineBuffer *output_buffer = NULL;
+	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+		if (output_buffers[i].refcount == 0) {
+			output_buffer = &output_buffers[i];
+		}
+	}
+
+	if (output_buffer == NULL) {
+		return NULL;
+	}
+	assert(output_buffer != NULL);
+
+#ifdef RENDERDOC
+	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+#endif
+
+	// Copy image to a GL texture. TODO: This can be avoided
+	GLuint input_texture;
+	glGenTextures(1, &input_texture);
+	glBindTexture(GL_TEXTURE_2D, input_texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, mode.width, mode.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, image);
+	check_gl();
+
+	gles2_debayer_process(
+		gles2_debayer, output_buffer->texture_id, input_texture);
+	check_gl();
+
+	glFinish();
+
+	glDeleteTextures(1, &input_texture);
+
+#ifdef PROFILE_DEBAYER
+	clock_t t2 = clock();
+	printf("process_image_for_preview %fms\n", (float)(t2 - t1) / CLOCKS_PER_SEC * 1000);
+#endif
+
+#ifdef RENDERDOC
+	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+#endif
+
+	mp_process_pipeline_buffer_ref(output_buffer);
+	mp_main_set_preview(output_buffer);
+
+	// Create a thumbnail from the preview for the last capture
+	GdkTexture *thumb = NULL;
+	if (captures_remaining == 1) {
+		printf("Making thumbnail\n");
+
+		size_t size = output_buffer_width * output_buffer_height * sizeof(uint32_t);
+
+		uint32_t *data = g_malloc_n(size, 1);
+
+		glReadPixels(0, 0, output_buffer_width, output_buffer_height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		check_gl();
+
+		// Flip vertically
+		for (size_t y = 0; y < output_buffer_height / 2; ++y) {
+			for (size_t x = 0; x < output_buffer_width; ++x) {
+				uint32_t tmp = data[(output_buffer_height - y - 1) * output_buffer_width + x];
+				data[(output_buffer_height - y - 1) * output_buffer_width + x] = data[y * output_buffer_width + x];
+				data[y * output_buffer_width + x] = tmp;
+			}
+		}
+
+		thumb = gdk_memory_texture_new(
+			output_buffer_width,
+			output_buffer_height,
+			GDK_MEMORY_R8G8B8A8,
+			g_bytes_new_take(data, size),
+			output_buffer_width * sizeof(uint32_t));
+	}
 
 	return thumb;
 }
 
 static void
-process_image_for_capture(const MPImage *image, int count)
+process_image_for_capture(const uint8_t *image, int count)
 {
 	time_t rawtime;
 	time(&rawtime);
@@ -193,21 +353,21 @@ process_image_for_capture(const MPImage *image, int count)
 
 	// Define TIFF thumbnail
 	TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 1);
-	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, image->width >> 4);
-	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, image->height >> 4);
+	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, mode.width >> 4);
+	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, mode.height >> 4);
 	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
 	TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_NONE);
 	TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
 	TIFFSetField(tif, TIFFTAG_MAKE, mp_get_device_make());
 	TIFFSetField(tif, TIFFTAG_MODEL, mp_get_device_model());
 	uint16_t orientation;
-	if (camera->rotate == 0) {
+	if (camera_rotation == 0) {
 		orientation = camera->mirrored ? ORIENTATION_TOPRIGHT :
 						 ORIENTATION_TOPLEFT;
-	} else if (camera->rotate == 90) {
+	} else if (camera_rotation == 90) {
 		orientation = camera->mirrored ? ORIENTATION_RIGHTBOT :
 						 ORIENTATION_LEFTBOT;
-	} else if (camera->rotate == 180) {
+	} else if (camera_rotation == 180) {
 		orientation = camera->mirrored ? ORIENTATION_BOTLEFT :
 						 ORIENTATION_BOTRIGHT;
 	} else {
@@ -241,8 +401,8 @@ process_image_for_capture(const MPImage *image, int count)
 	// Write black thumbnail, only windows uses this
 	{
 		unsigned char *buf =
-			(unsigned char *)calloc(1, (int)image->width >> 4);
-		for (int row = 0; row < (image->height >> 4); row++) {
+			(unsigned char *)calloc(1, (int)mode.width >> 4);
+		for (int row = 0; row < (mode.height >> 4); row++) {
 			TIFFWriteScanline(tif, buf, row, 0);
 		}
 		free(buf);
@@ -251,8 +411,8 @@ process_image_for_capture(const MPImage *image, int count)
 
 	// Define main photo
 	TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
-	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, image->width);
-	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, image->height);
+	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, mode.width);
+	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, mode.height);
 	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
 	TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
 	TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
@@ -274,9 +434,9 @@ process_image_for_capture(const MPImage *image, int count)
 	TIFFCheckpointDirectory(tif);
 	printf("Writing frame to %s\n", fname);
 
-	unsigned char *pLine = (unsigned char *)malloc(image->width);
-	for (int row = 0; row < image->height; row++) {
-		TIFFWriteScanline(tif, image->data + (row * image->width), row, 0);
+	unsigned char *pLine = (unsigned char *)malloc(mode.width);
+	for (int row = 0; row < mode.height; row++) {
+		TIFFWriteScanline(tif, (void *) image + (row * mode.width), row, 0);
 	}
 	free(pLine);
 	TIFFWriteDirectory(tif);
@@ -293,7 +453,7 @@ process_image_for_capture(const MPImage *image, int count)
 	TIFFSetField(tif, EXIFTAG_EXPOSURETIME,
 		     (mode.frame_interval.numerator /
 		      (float)mode.frame_interval.denominator) /
-			     ((float)image->height / (float)exposure));
+			     ((float)mode.height / (float)exposure));
 	uint16_t isospeed[1];
 	isospeed[0] = (uint16_t)remap(gain - 1, 0, gain_max, camera->iso_min,
 				      camera->iso_max);
@@ -325,7 +485,7 @@ process_image_for_capture(const MPImage *image, int count)
 }
 
 static void
-post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thumb)
+post_process_finished(GSubprocess *proc, GAsyncResult *res, GdkTexture *thumb)
 {
 	char *stdout;
 	g_subprocess_communicate_utf8_finish(proc, res, &stdout, NULL, NULL);
@@ -348,7 +508,7 @@ post_process_finished(GSubprocess *proc, GAsyncResult *res, cairo_surface_t *thu
 }
 
 static void
-process_capture_burst(cairo_surface_t *thumb)
+process_capture_burst(GdkTexture *thumb)
 {
 	time_t rawtime;
 	time(&rawtime);
@@ -401,11 +561,27 @@ process_capture_burst(cairo_surface_t *thumb)
 }
 
 static void
-process_image(MPPipeline *pipeline, const MPImage *image)
+process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 {
-	assert(image->width == mode.width && image->height == mode.height);
+#ifdef PROFILE_PROCESS
+	clock_t t1 = clock();
+#endif
 
-	cairo_surface_t *thumb = process_image_for_preview(image);
+	size_t size =
+		mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) *
+		mode.height;
+	uint8_t *image = malloc(size);
+	memcpy(image, buffer->data, size);
+	mp_io_pipeline_release_buffer(buffer->index);
+
+	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera_rotation, camera->mirrored);
+	mp_zbar_pipeline_process_image(mp_zbar_image_ref(zbar_image));
+
+#ifdef PROFILE_PROCESS
+	clock_t t2 = clock();
+#endif
+
+	GdkTexture *thumb = process_image_for_preview(image);
 
 	if (captures_remaining > 0) {
 		int count = burst_length - captures_remaining;
@@ -423,28 +599,35 @@ process_image(MPPipeline *pipeline, const MPImage *image)
 		assert(!thumb);
 	}
 
-	free(image->data);
+	mp_zbar_image_unref(zbar_image);
 
 	++frames_processed;
 	if (captures_remaining == 0) {
 		is_capturing = false;
 	}
+
+#ifdef PROFILE_PROCESS
+	clock_t t3 = clock();
+	printf("process_image %fms, step 1:%fms, step 2:%fms\n",
+	       (float)(t3 - t1) / CLOCKS_PER_SEC * 1000,
+	       (float)(t2 - t1) / CLOCKS_PER_SEC * 1000,
+	       (float)(t3 - t2) / CLOCKS_PER_SEC * 1000);
+#endif
 }
 
 void
-mp_process_pipeline_process_image(MPImage image)
+mp_process_pipeline_process_image(MPBuffer buffer)
 {
 	// If we haven't processed the previous frame yet, drop this one
 	if (frames_received != frames_processed && !is_capturing) {
-		printf("Dropped frame at capture\n");
-		free(image.data);
+		mp_io_pipeline_release_buffer(buffer.index);
 		return;
 	}
 
 	++frames_received;
 
-	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_image, &image,
-			   sizeof(MPImage));
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback)process_image, &buffer,
+			   sizeof(MPBuffer));
 }
 
 static void
@@ -473,15 +656,58 @@ mp_process_pipeline_capture()
 }
 
 static void
+on_output_changed()
+{
+	output_buffer_width = mode.width / 2;
+	output_buffer_height = mode.height / 2;
+
+	if (camera->rotate != 0 || camera->rotate != 180) {
+		int tmp = output_buffer_width;
+		output_buffer_width = output_buffer_height;
+		output_buffer_height = tmp;
+	}
+
+	for (size_t i = 0; i < NUM_BUFFERS; ++i) {
+		glBindTexture(GL_TEXTURE_2D, output_buffers[i].texture_id);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, output_buffer_width, output_buffer_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	gles2_debayer_configure(
+		gles2_debayer,
+		output_buffer_width, output_buffer_height,
+		mode.width, mode.height,
+		camera->rotate, camera->mirrored,
+		camera->previewmatrix[0] == 0 ? NULL : camera->previewmatrix,
+		camera->blacklevel);
+}
+
+static int
+mod(int a, int b)
+{
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+
+static void
 update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state)
 {
+	const bool output_changed =
+		!mp_camera_mode_is_equivalent(&mode, &state->mode)
+		|| preview_width != state->preview_width
+		|| preview_height != state->preview_height
+		|| device_rotation != state->device_rotation;
+
 	camera = state->camera;
 	mode = state->mode;
 
-	burst_length = state->burst_length;
-
 	preview_width = state->preview_width;
 	preview_height = state->preview_height;
+
+	device_rotation = state->device_rotation;
+
+	burst_length = state->burst_length;
 
 	// gain_is_manual = state->gain_is_manual;
 	gain = state->gain;
@@ -490,9 +716,17 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
 	exposure_is_manual = state->exposure_is_manual;
 	exposure = state->exposure;
 
+	if (output_changed) {
+		camera_rotation = mod(camera->rotate - device_rotation, 360);
+
+		on_output_changed();
+	}
+
 	struct mp_main_state main_state = {
 		.camera = camera,
 		.mode = mode,
+		.image_width = output_buffer_width,
+		.image_height = output_buffer_height,
 		.gain_is_manual = state->gain_is_manual,
 		.gain = gain,
 		.gain_max = gain_max,
@@ -510,3 +744,6 @@ mp_process_pipeline_update_state(const struct mp_process_pipeline_state *new_sta
 	mp_pipeline_invoke(pipeline, (MPPipelineCallback)update_state, new_state,
 			   sizeof(struct mp_process_pipeline_state));
 }
+
+// GTK4 seems to require this
+void pango_fc_font_get_languages() {}

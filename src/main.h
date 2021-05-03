@@ -2,13 +2,15 @@
 
 #include "camera_config.h"
 #include "zbar_pipeline.h"
+#include "process_pipeline.h"
 #include "gtk/gtk.h"
-
-#define MP_MAIN_THUMB_SIZE 24
 
 struct mp_main_state {
 	const struct mp_camera_config *camera;
 	MPCameraMode mode;
+
+	int image_width;
+	int image_height;
 
 	bool gain_is_manual;
 	int gain;
@@ -23,12 +25,9 @@ struct mp_main_state {
 
 void mp_main_update_state(const struct mp_main_state *state);
 
-void mp_main_set_preview(cairo_surface_t *image);
-void mp_main_capture_completed(cairo_surface_t *thumb, const char *fname);
+void mp_main_set_preview(MPProcessPipelineBuffer *buffer);
+void mp_main_capture_completed(GdkTexture *thumb, const char *fname);
 
 void mp_main_set_zbar_result(MPZBarScanResult *result);
 
 int remap(int value, int input_min, int input_max, int output_min, int output_max);
-
-void draw_surface_scaled_centered(cairo_t *cr, uint32_t dst_width, uint32_t dst_height,
-			          cairo_surface_t *surface);

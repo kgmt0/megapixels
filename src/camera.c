@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #define MAX_VIDEO_BUFFERS 20
 
@@ -205,6 +206,7 @@ xioctl(int fd, int request, void *arg)
 struct video_buffer {
 	uint32_t length;
 	uint8_t *data;
+	int fd;
 };
 
 struct _MPCamera {
@@ -465,6 +467,17 @@ mp_camera_start_capture(MPCamera *camera)
 			break;
 		}
 
+		struct v4l2_exportbuffer expbuf = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			.index = i,
+		};
+		if (xioctl(camera->video_fd, VIDIOC_EXPBUF, &expbuf) == -1) {
+			errno_printerr("VIDIOC_EXPBUF");
+			break;
+		}
+
+		camera->buffers[i].fd = expbuf.fd;
+
 		++camera->num_buffers;
 	}
 
@@ -510,6 +523,10 @@ error:
 		    -1) {
 			errno_printerr("munmap");
 		}
+
+		if (close(camera->buffers[i].fd) == -1) {
+			errno_printerr("close");
+		}
 	}
 
 	// Reset allocated buffers
@@ -543,6 +560,10 @@ mp_camera_stop_capture(MPCamera *camera)
 		    -1) {
 			errno_printerr("munmap");
 		}
+
+		if (close(camera->buffers[i].fd) == -1) {
+			errno_printerr("close");
+		}
 	}
 
 	camera->num_buffers = 0;
@@ -565,8 +586,7 @@ mp_camera_is_capturing(MPCamera *camera)
 }
 
 bool
-mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *),
-			void *user_data)
+mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
 {
 	struct v4l2_buffer buf = {};
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -587,6 +607,7 @@ mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *),
 			/* fallthrough */
 		default:
 			errno_printerr("VIDIOC_DQBUF");
+			exit(1);
 			return false;
 		}
 	}
@@ -606,24 +627,23 @@ mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *),
 	       mp_pixel_format_width_to_bytes(pixel_format, width) * height);
 	assert(bytesused == camera->buffers[buf.index].length);
 
-	MPImage image = {
-		.pixel_format = pixel_format,
-		.width = width,
-		.height = height,
-		.data = camera->buffers[buf.index].data,
-	};
+	buffer->index = buf.index;
+	buffer->data = camera->buffers[buf.index].data;
+	buffer->fd = camera->buffers[buf.index].fd;
 
-	callback(image, user_data);
+	return true;
+}
 
-	// The callback may have stopped the capture, only queue the buffer if we're
-	// still capturing.
-	if (mp_camera_is_capturing(camera)) {
-		if (xioctl(camera->video_fd, VIDIOC_QBUF, &buf) == -1) {
-			errno_printerr("VIDIOC_QBUF");
-			return false;
-		}
+bool mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index)
+{
+	struct v4l2_buffer buf = {};
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	buf.index = buffer_index;
+	if (xioctl(camera->video_fd, VIDIOC_QBUF, &buf) == -1) {
+		errno_printerr("VIDIOC_QBUF");
+		return false;
 	}
-
 	return true;
 }
 

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkWindow" id="window">
+    <property name="can-focus">0</property>
+    <property name="default-width">360</property>
+    <property name="default-height">640</property>
+    <property name="decorated">0</property>
+    <property name="child">
+      <object class="GtkStack" id="main_stack">
+        <property name="can-focus">0</property>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">main</property>
+            <property name="child">
+              <object class="GtkOverlay">
+                <property name="can-focus">0</property>
+                <child>
+                  <object class="GtkGLArea" id="preview">
+                    <property name="vexpand">1</property>
+                    <property name="can-focus">0</property>
+                    <property name="use-es">1</property>
+                  </object>
+                </child>
+                <child type="overlay">
+                  <object class="GtkBox" id="top-box">
+                    <property name="orientation">vertical</property>
+                    <property name="halign">fill</property>
+                    <property name="valign">start</property>
+                    <property name="spacing">5</property>
+                    <property name="can-focus">0</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
+                        <property name="vexpand">1</property>
+                        <property name="hexpand">1</property>
+                        <property name="valign">start</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="can-focus">0</property>
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkButton" id="iso-controls-button">
+                            <property name="valign">start</property>
+                            <property name="label">ISO</property>
+                            <style>
+                              <class name="circular"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="shutter-controls-button">
+                            <property name="valign">start</property>
+                            <property name="icon-name">shutter-symbolic</property>
+                            <style>
+                              <class name="circular"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="visible">0</property>
+                        <property name="halign">start</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">horizontal</property>
+                            <property name="spacing">10</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="label">Error</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="icon-name">dialog-warning-symbolic</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <style>
+                          <class name="destructive-action"/>
+                        </style>
+                      </object>
+                    </child>
+                    <style>
+                      <class name="button-overlay"/>
+                    </style>
+                  </object>
+                </child>
+                <child type="overlay">
+                  <object class="GtkBox" id="bottom-box">
+                    <property name="orientation">horizontal</property>
+                    <property name="halign">fill</property>
+                    <property name="valign">end</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
+                        <property name="hexpand">1</property>
+                        <property name="vexpand">1</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-settings</property>
+                            <property name="icon-name">settings-symbolic</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.switch-camera</property>
+                            <property name="icon-name">switch-camera-symbolic</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="action-name">app.capture</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="pixel-size">60</property>
+                            <property name="can-focus">0</property>
+                            <property name="icon-name">shutter-button-symbolic</property>
+                          </object>
+                        </child>
+                        <style>
+                          <class name="circular"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
+                        <property name="hexpand">1</property>
+                        <property name="vexpand">1</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
+                        <property name="margin-top">5</property>
+                        <property name="margin-bottom">5</property>
+                        <property name="spacing">5</property>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-last</property>
+                            <child>
+                              <object class="GtkStack" id="open_last_stack">
+                                <property name="can-focus">0</property>
+                                <child>
+                                  <object class="GtkImage" id="thumb_last">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSpinner" id="process_spinner">
+                                    <property name="width-request">24</property>
+                                    <property name="height-request">24</property>
+                                    <property name="can-focus">0</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton">
+                            <property name="action-name">app.open-photos</property>
+                            <property name="icon-name">folder-symbolic</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <style>
+                      <class name="button-overlay"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">settings</property>
+            <property name="title" translatable="yes">page1</property>
+            <property name="child">
+              <object class="GtkScrolledWindow">
+                <property name="child">
+                  <object class="GtkViewport">
+                    <property name="can-focus">0</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="can-focus">0</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-end">10</property>
+                        <property name="margin-top">10</property>
+                        <property name="margin-bottom">10</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="can-focus">0</property>
+                            <child>
+                              <object class="GtkButton">
+                                <property name="label" translatable="yes">Back</property>
+                                <property name="margin-start">10</property>
+                                <property name="margin-end">10</property>
+                                <property name="action-name">app.close-settings</property>
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="can-focus">0</property>
+                                <property name="label" translatable="yes">Settings aren't functional yet</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
+</interface>

@@ -75,6 +75,8 @@ static int captures_remaining = 0;
 static int preview_width;
 static int preview_height;
 
+static int device_rotation;
+
 struct control_state {
 	bool gain_is_manual;
 	int gain;
@@ -185,6 +187,12 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 
 		info->camera = mp_camera_new(dev_info->video_fd, info->fd);
 
+		// Start with the capture format, this works around a bug with
+		// the ov5640 driver where it won't allow setting the preview
+		// format initially.
+		MPCameraMode mode = config->capture_mode;
+		mp_camera_set_mode(info->camera, &mode);
+
 		// Trigger continuous auto focus if the sensor supports it
 		if (mp_camera_query_control(info->camera, V4L2_CID_FOCUS_AUTO,
 					    NULL)) {
@@ -269,6 +277,7 @@ update_process_pipeline()
 		.burst_length = burst_length,
 		.preview_width = preview_width,
 		.preview_height = preview_height,
+		.device_rotation = device_rotation,
 		.gain_is_manual = current_controls.gain_is_manual,
 		.gain = current_controls.gain,
 		.gain_max = info->gain_max,
@@ -305,6 +314,7 @@ capture(MPPipeline *pipeline, const void *data)
 				    V4L2_EXPOSURE_MANUAL);
 
 	// Change camera mode for capturing
+	mp_process_pipeline_sync();
 	mp_camera_stop_capture(info->camera);
 
 	mode = camera->capture_mode;
@@ -322,6 +332,19 @@ void
 mp_io_pipeline_capture()
 {
 	mp_pipeline_invoke(pipeline, capture, NULL, 0);
+}
+
+static void
+release_buffer(MPPipeline *pipeline, const uint32_t *buffer_index)
+{
+	struct camera_info *info = &cameras[camera->index];
+
+	mp_camera_release_buffer(info->camera, *buffer_index);
+}
+
+void mp_io_pipeline_release_buffer(uint32_t buffer_index)
+{
+	mp_pipeline_invoke(pipeline, (MPPipelineCallback) release_buffer, &buffer_index, sizeof(uint32_t));
 }
 
 static void
@@ -375,7 +398,7 @@ update_controls()
 }
 
 static void
-on_frame(MPImage image, void *data)
+on_frame(MPBuffer buffer, void * _data)
 {
 	// Only update controls right after a frame was captured
 	update_controls();
@@ -384,13 +407,13 @@ on_frame(MPImage image, void *data)
 	// presumably from buffers made ready during the switch. Ignore these.
 	if (just_switched_mode) {
 		if (blank_frame_count < 20) {
-			// Only check a 50x50 area
+			// Only check a 10x10 area
 			size_t test_size =
-				MIN(50, image.width) * MIN(50, image.height);
+				MIN(10, mode.width) * MIN(10, mode.height);
 
 			bool image_is_blank = true;
 			for (size_t i = 0; i < test_size; ++i) {
-				if (image.data[i] != 0) {
+				if (buffer.data[i] != 0) {
 					image_is_blank = false;
 				}
 			}
@@ -407,17 +430,8 @@ on_frame(MPImage image, void *data)
 		blank_frame_count = 0;
 	}
 
-	// Copy from the camera buffer
-	size_t size =
-		mp_pixel_format_width_to_bytes(image.pixel_format, image.width) *
-		image.height;
-	uint8_t *buffer = malloc(size);
-	memcpy(buffer, image.data, size);
-
-	image.data = buffer;
-
 	// Send the image off for processing
-	mp_process_pipeline_process_image(image);
+	mp_process_pipeline_process_image(buffer);
 
 	if (captures_remaining > 0) {
 		--captures_remaining;
@@ -438,6 +452,7 @@ on_frame(MPImage image, void *data)
 			}
 
 			// Go back to preview mode
+			mp_process_pipeline_sync();
 			mp_camera_stop_capture(info->camera);
 
 			mode = camera->preview_mode;
@@ -465,6 +480,7 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 			struct camera_info *info = &cameras[camera->index];
 			struct device_info *dev_info = &devices[info->device_index];
 
+			mp_process_pipeline_sync();
 			mp_camera_stop_capture(info->camera);
 			mp_device_setup_link(dev_info->device, info->pad_id,
 					     dev_info->interface_pad_id, false);
@@ -492,15 +508,15 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 				pipeline, info->camera, on_frame, NULL);
 
 			current_controls.gain_is_manual =
-				mp_camera_control_get_int32(
-					info->camera, V4L2_CID_EXPOSURE_AUTO) ==
-				V4L2_EXPOSURE_MANUAL;
+				mp_camera_control_get_bool(info->camera,
+							   V4L2_CID_AUTOGAIN) == 0;
 			current_controls.gain = mp_camera_control_get_int32(
 				info->camera, info->gain_ctrl);
 
 			current_controls.exposure_is_manual =
-				mp_camera_control_get_bool(info->camera,
-							   V4L2_CID_AUTOGAIN) == 0;
+				mp_camera_control_get_int32(
+					info->camera, V4L2_CID_EXPOSURE_AUTO) ==
+				V4L2_EXPOSURE_MANUAL;
 			current_controls.exposure = mp_camera_control_get_int32(
 				info->camera, V4L2_CID_EXPOSURE);
 		}
@@ -508,11 +524,13 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 
 	has_changed = has_changed || burst_length != state->burst_length ||
 		      preview_width != state->preview_width ||
-		      preview_height != state->preview_height;
+		      preview_height != state->preview_height ||
+		      device_rotation != state->device_rotation;
 
 	burst_length = state->burst_length;
 	preview_width = state->preview_width;
 	preview_height = state->preview_height;
+	device_rotation = state->device_rotation;
 
 	if (camera) {
 		struct control_state previous_desired = desired_controls;

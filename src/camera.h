@@ -45,11 +45,11 @@ typedef struct {
 bool mp_camera_mode_is_equivalent(const MPCameraMode *m1, const MPCameraMode *m2);
 
 typedef struct {
-	uint32_t pixel_format;
-	uint32_t width;
-	uint32_t height;
+	uint32_t index;
+
 	uint8_t *data;
-} MPImage;
+	int fd;
+} MPBuffer;
 
 typedef struct _MPCamera MPCamera;
 
@@ -67,8 +67,8 @@ bool mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode);
 bool mp_camera_start_capture(MPCamera *camera);
 bool mp_camera_stop_capture(MPCamera *camera);
 bool mp_camera_is_capturing(MPCamera *camera);
-bool mp_camera_capture_image(MPCamera *camera, void (*callback)(MPImage, void *),
-			     void *user_data);
+bool mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer);
+bool mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index);
 
 typedef struct _MPCameraModeList MPCameraModeList;
 

@@ -65,6 +65,27 @@ mp_pipeline_invoke(MPPipeline *pipeline, MPPipelineCallback callback,
 	}
 }
 
+static bool
+unlock_mutex(GMutex *mutex)
+{
+	g_mutex_unlock(mutex);
+	return false;
+}
+
+void
+mp_pipeline_sync(MPPipeline *pipeline)
+{
+	GMutex mutex;
+	g_mutex_init(&mutex);
+	g_mutex_lock(&mutex);
+
+	g_main_context_invoke_full(pipeline->main_context, G_PRIORITY_LOW, (GSourceFunc)unlock_mutex, &mutex, NULL);
+	g_mutex_lock(&mutex);
+	g_mutex_unlock(&mutex);
+
+	g_mutex_clear(&mutex);
+}
+
 void
 mp_pipeline_free(MPPipeline *pipeline)
 {
@@ -80,21 +101,24 @@ mp_pipeline_free(MPPipeline *pipeline)
 
 struct capture_source_args {
 	MPCamera *camera;
-	void (*callback)(MPImage, void *);
+	void (*callback)(MPBuffer, void *);
 	void *user_data;
 };
 
 static bool
 on_capture(int fd, GIOCondition condition, struct capture_source_args *args)
 {
-	mp_camera_capture_image(args->camera, args->callback, args->user_data);
+	MPBuffer buffer;
+	if (mp_camera_capture_buffer(args->camera, &buffer)) {
+		args->callback(buffer, args->user_data);
+	}
 	return true;
 }
 
 // Not thread safe
 GSource *
 mp_pipeline_add_capture_source(MPPipeline *pipeline, MPCamera *camera,
-			       void (*callback)(MPImage, void *), void *user_data)
+			       void (*callback)(MPBuffer, void *), void *user_data)
 {
 	int video_fd = mp_camera_get_video_fd(camera);
 	GSource *video_source = g_unix_fd_source_new(video_fd, G_IO_IN);
