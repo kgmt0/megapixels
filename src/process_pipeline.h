@@ -13,6 +13,8 @@ struct mp_process_pipeline_state {
 	int preview_width;
 	int preview_height;
 
+	int device_rotation;
+
 	bool gain_is_manual;
 	int gain;
 	int gain_max;

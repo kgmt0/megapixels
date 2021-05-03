@@ -40,6 +40,8 @@ static MPCameraMode mode;
 static int preview_width = -1;
 static int preview_height = -1;
 
+static int device_rotation = 0;
+
 static bool gain_is_manual = false;
 static int gain;
 static int gain_max;
@@ -95,6 +97,7 @@ update_io_pipeline()
 		.burst_length = burst_length,
 		.preview_width = preview_width,
 		.preview_height = preview_height,
+		.device_rotation = device_rotation,
 		.gain_is_manual = gain_is_manual,
 		.gain = gain,
 		.exposure_is_manual = exposure_is_manual,
@@ -215,6 +218,7 @@ mp_main_capture_completed(GdkTexture *thumb, const char *fname)
 }
 
 static GLuint blit_program;
+static GLuint blit_uniform_transform;
 static GLuint blit_uniform_texture;
 static GLuint solid_program;
 static GLuint solid_uniform_color;
@@ -247,6 +251,7 @@ preview_realize(GtkGLArea *area)
 	glBindAttribLocation(blit_program, GL_UTIL_TEX_COORD_ATTRIBUTE, "tex_coord");
 	check_gl();
 
+	blit_uniform_transform = glGetUniformLocation(blit_program, "transform");
 	blit_uniform_texture = glGetUniformLocation(blit_program, "texture");
 
 	GLuint solid_shaders[] = {
@@ -266,17 +271,26 @@ preview_realize(GtkGLArea *area)
 static void
 position_preview(float *offset_x, float *offset_y, float *size_x, float *size_y)
 {
-	int scale = gtk_widget_get_scale_factor(preview);
-	int preview_height = gtk_widget_get_allocated_height(preview) * scale;
-	int top_height = gtk_widget_get_allocated_height(preview_top_box) * scale;
-	int bottom_height = gtk_widget_get_allocated_height(preview_bottom_box) * scale;
+	int buffer_width, buffer_height;
+	if (device_rotation == 0 || device_rotation == 180) {
+		buffer_width = preview_buffer_width;
+		buffer_height = preview_buffer_height;
+	} else {
+		buffer_width = preview_buffer_height;
+		buffer_height = preview_buffer_width;
+	}
+
+	int scale_factor = gtk_widget_get_scale_factor(preview);
+	int top_height = gtk_widget_get_allocated_height(preview_top_box) * scale_factor;
+	int bottom_height = gtk_widget_get_allocated_height(preview_bottom_box) * scale_factor;
 	int inner_height = preview_height - top_height - bottom_height;
 
-	double ratio = preview_buffer_height / (double)preview_buffer_width;
+	double scale = MIN(preview_width / (float) buffer_width, preview_height / (float) buffer_height);
 
-	*offset_x = 0;
-	*size_x = preview_width;
-	*size_y = preview_width * ratio;
+	*size_x = scale * buffer_width;
+	*size_y = scale * buffer_height;
+
+	*offset_x = (preview_width - *size_x) / 2.0;
 
 	if (*size_y > inner_height) {
 		*offset_y = (preview_height - *size_y) / 2.0;
@@ -313,6 +327,19 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 
 	if (current_preview_buffer) {
 		glUseProgram(blit_program);
+
+		GLfloat rotation_list[4] = { 0, -1, 0, 1 };
+		int rotation_index = device_rotation / 90;
+
+		GLfloat sin_rot = rotation_list[rotation_index];
+		GLfloat cos_rot = rotation_list[(4 + rotation_index - 1) % 4];
+		GLfloat matrix[9] = {
+			cos_rot, sin_rot, 0,
+			-sin_rot, cos_rot, 0,
+			0, 0, 1,
+		};
+		glUniformMatrix3fv(blit_uniform_transform, 1, GL_FALSE, matrix);
+		check_gl();
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, mp_process_pipeline_buffer_get_texture_id(current_preview_buffer));
@@ -719,6 +746,62 @@ create_simple_action(GtkApplication *app, const char *name, GCallback callback)
 	return action;
 }
 
+static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
+{
+	GError *error = NULL;
+	GVariant *result = g_dbus_connection_call_finish(conn, res, &error);
+
+	if (!result) {
+		printf("Failed to get display configuration: %s\n", error->message);
+		return;
+	}
+
+	GVariant *configs = g_variant_get_child_value(result, 1);
+	if (g_variant_n_children(configs) == 0) {
+		return;
+	}
+
+	GVariant *config = g_variant_get_child_value(configs, 0);
+	GVariant *rot_config = g_variant_get_child_value(config, 7);
+	uint32_t rotation_index = g_variant_get_uint32(rot_config);
+
+	assert(rotation_index < 4);
+	int new_rotation = rotation_index * 90;
+
+	if (new_rotation != device_rotation) {
+		device_rotation = new_rotation;
+		update_io_pipeline();
+	}
+}
+
+static void update_screen_rotation(GDBusConnection *conn)
+{
+	g_dbus_connection_call(conn,
+		"org.gnome.Mutter.DisplayConfig",
+		"/org/gnome/Mutter/DisplayConfig",
+		"org.gnome.Mutter.DisplayConfig",
+		"GetResources",
+		NULL,
+		NULL,
+		G_DBUS_CALL_FLAGS_NO_AUTO_START,
+		-1,
+		NULL,
+		(GAsyncReadyCallback)display_config_received,
+		NULL);
+}
+
+static void on_screen_rotate(
+	GDBusConnection *conn,
+        const gchar *sender_name,
+        const gchar *object_path,
+        const gchar *interface_name,
+        const gchar *signal_name,
+        GVariant *parameters,
+        gpointer user_data)
+{
+	update_screen_rotation(conn);
+}
+
 static void
 activate(GtkApplication *app, gpointer data)
 {
@@ -778,6 +861,21 @@ activate(GtkApplication *app, gpointer data)
 
 	const char *quit_accels[] = { "<Ctrl>q", "<Ctrl>w", NULL };
 	gtk_application_set_accels_for_action(app, "app.quit", quit_accels);
+
+	// Listen for phosh rotation
+	GDBusConnection *conn = g_application_get_dbus_connection(G_APPLICATION(app));
+	g_dbus_connection_signal_subscribe(
+		conn,
+		NULL,
+		"org.gnome.Mutter.DisplayConfig",
+		"MonitorsChanged",
+		"/org/gnome/Mutter/DisplayConfig",
+		NULL,
+		G_DBUS_SIGNAL_FLAGS_NONE,
+		&on_screen_rotate,
+		NULL,
+		NULL);
+	update_screen_rotation(conn);
 
 	mp_io_pipeline_start();
 

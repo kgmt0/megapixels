@@ -31,6 +31,7 @@ static volatile int frames_processed = 0;
 static volatile int frames_received = 0;
 
 static const struct mp_camera_config *camera;
+static int camera_rotation;
 
 static MPCameraMode mode;
 
@@ -39,6 +40,8 @@ static int captures_remaining = 0;
 
 static int preview_width;
 static int preview_height;
+
+static int device_rotation;
 
 static int output_buffer_width = -1;
 static int output_buffer_height = -1;
@@ -370,13 +373,13 @@ process_image_for_capture(const uint8_t *image, int count)
 	TIFFSetField(tif, TIFFTAG_MAKE, mp_get_device_make());
 	TIFFSetField(tif, TIFFTAG_MODEL, mp_get_device_model());
 	uint16_t orientation;
-	if (camera->rotate == 0) {
+	if (camera_rotation == 0) {
 		orientation = camera->mirrored ? ORIENTATION_TOPRIGHT :
 						 ORIENTATION_TOPLEFT;
-	} else if (camera->rotate == 90) {
+	} else if (camera_rotation == 90) {
 		orientation = camera->mirrored ? ORIENTATION_RIGHTBOT :
 						 ORIENTATION_LEFTBOT;
-	} else if (camera->rotate == 180) {
+	} else if (camera_rotation == 180) {
 		orientation = camera->mirrored ? ORIENTATION_BOTLEFT :
 						 ORIENTATION_BOTRIGHT;
 	} else {
@@ -583,7 +586,7 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
 	memcpy(image, buffer->data, size);
 	mp_io_pipeline_release_buffer(buffer->index);
 
-	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera->rotate, camera->mirrored);
+	MPZBarImage *zbar_image = mp_zbar_image_new(image, mode.pixel_format, mode.width, mode.height, camera_rotation, camera->mirrored);
 	mp_zbar_pipeline_process_image(mp_zbar_image_ref(zbar_image));
 
 #ifdef PROFILE_PROCESS
@@ -692,16 +695,29 @@ on_output_changed()
 		camera->blacklevel);
 }
 
+static int
+mod(int a, int b)
+{
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+
 static void
 update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state)
 {
-	const bool output_changed = (!mp_camera_mode_is_equivalent(&mode, &state->mode) || preview_width != state->preview_width || preview_height != state->preview_height);
+	const bool output_changed =
+		!mp_camera_mode_is_equivalent(&mode, &state->mode)
+		|| preview_width != state->preview_width
+		|| preview_height != state->preview_height
+		|| device_rotation != state->device_rotation;
 
 	camera = state->camera;
 	mode = state->mode;
 
 	preview_width = state->preview_width;
 	preview_height = state->preview_height;
+
+	device_rotation = state->device_rotation;
 
 	burst_length = state->burst_length;
 
@@ -713,6 +729,8 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
 	exposure = state->exposure;
 
 	if (output_changed) {
+		camera_rotation = mod(camera->rotate - device_rotation, 360);
+
 		on_output_changed();
 	}
 

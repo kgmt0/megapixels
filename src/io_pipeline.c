@@ -75,6 +75,8 @@ static int captures_remaining = 0;
 static int preview_width;
 static int preview_height;
 
+static int device_rotation;
+
 struct control_state {
 	bool gain_is_manual;
 	int gain;
@@ -275,6 +277,7 @@ update_process_pipeline()
 		.burst_length = burst_length,
 		.preview_width = preview_width,
 		.preview_height = preview_height,
+		.device_rotation = device_rotation,
 		.gain_is_manual = current_controls.gain_is_manual,
 		.gain = current_controls.gain,
 		.gain_max = info->gain_max,
@@ -521,11 +524,13 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
 
 	has_changed = has_changed || burst_length != state->burst_length ||
 		      preview_width != state->preview_width ||
-		      preview_height != state->preview_height;
+		      preview_height != state->preview_height ||
+		      device_rotation != state->device_rotation;
 
 	burst_length = state->burst_length;
 	preview_width = state->preview_width;
 	preview_height = state->preview_height;
+	device_rotation = state->device_rotation;
 
 	if (camera) {
 		struct control_state previous_desired = desired_controls;
