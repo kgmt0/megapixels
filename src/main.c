@@ -746,6 +746,41 @@ create_simple_action(GtkApplication *app, const char *name, GCallback callback)
 	return action;
 }
 
+static void update_ui_rotation()
+{
+	if (device_rotation == 0 || device_rotation == 180) {
+		// Portrait
+		gtk_widget_set_halign(preview_top_box, GTK_ALIGN_FILL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box), GTK_ORIENTATION_VERTICAL);
+
+		gtk_widget_set_halign(preview_bottom_box, GTK_ALIGN_FILL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box), GTK_ORIENTATION_HORIZONTAL);
+
+		if (device_rotation == 0) {
+			gtk_widget_set_valign(preview_top_box, GTK_ALIGN_START);
+			gtk_widget_set_valign(preview_bottom_box, GTK_ALIGN_END);
+		} else {
+			gtk_widget_set_valign(preview_top_box, GTK_ALIGN_END);
+			gtk_widget_set_valign(preview_bottom_box, GTK_ALIGN_START);
+		}
+	} else {
+		// Landscape
+		gtk_widget_set_valign(preview_top_box, GTK_ALIGN_FILL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box), GTK_ORIENTATION_HORIZONTAL);
+
+		gtk_widget_set_valign(preview_bottom_box, GTK_ALIGN_FILL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box), GTK_ORIENTATION_VERTICAL);
+
+		if (device_rotation == 90) {
+			gtk_widget_set_halign(preview_top_box, GTK_ALIGN_END);
+			gtk_widget_set_halign(preview_bottom_box, GTK_ALIGN_START);
+		} else {
+			gtk_widget_set_halign(preview_top_box, GTK_ALIGN_START);
+			gtk_widget_set_halign(preview_bottom_box, GTK_ALIGN_END);
+		}
+	}
+}
+
 static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
 {
 	GError *error = NULL;
@@ -771,6 +806,7 @@ static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gp
 	if (new_rotation != device_rotation) {
 		device_rotation = new_rotation;
 		update_io_pipeline();
+		update_ui_rotation();
 	}
 }
 

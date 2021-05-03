@@ -31,7 +31,8 @@
                     <property name="can-focus">0</property>
                     <child>
                       <object class="GtkBox">
-                        <property name="orientation">horizontal</property>
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
+                        <property name="vexpand">1</property>
                         <property name="hexpand">1</property>
                         <property name="valign">start</property>
                         <property name="margin-start">5</property>
@@ -101,10 +102,13 @@
                     <property name="valign">end</property>
                     <child>
                       <object class="GtkBox">
-                        <property name="orientation">horizontal</property>
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
                         <property name="hexpand">1</property>
-                        <property name="valign">end</property>
+                        <property name="vexpand">1</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
                         <property name="margin-start">5</property>
+                        <property name="margin-end">5</property>
                         <property name="margin-top">5</property>
                         <property name="margin-bottom">5</property>
                         <property name="spacing">5</property>
@@ -141,10 +145,12 @@
                     </child>
                     <child>
                       <object class="GtkBox">
-                        <property name="orientation">horizontal</property>
+                        <property name="orientation" bind-source="bottom-box" bind-property="orientation"/>
                         <property name="hexpand">1</property>
-                        <property name="halign">end</property>
-                        <property name="valign">end</property>
+                        <property name="vexpand">1</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin-start">5</property>
                         <property name="margin-end">5</property>
                         <property name="margin-top">5</property>
                         <property name="margin-bottom">5</property>
