@@ -8,6 +8,7 @@
 #include <tiffio.h>
 #include <assert.h>
 #include <math.h>
+#include <wordexp.h>
 #include <gtk/gtk.h>
 
 #define TIFFTAG_FORWARDMATRIX1 50964
@@ -59,9 +60,19 @@ register_custom_tiff_tags(TIFF *tif)
 static bool
 find_processor(char *script)
 {
+	char *xdg_config_home;
 	char filename[] = "postprocess.sh";
+	wordexp_t exp_result;
 
-	// Check postprocess.sh in the current working directory
+	// Resolve XDG stuff
+	if ((xdg_config_home = getenv("XDG_CONFIG_HOME")) == NULL) {
+		xdg_config_home = "~/.config";
+	}
+	wordexp(xdg_config_home, &exp_result, 0);
+	xdg_config_home = strdup(exp_result.we_wordv[0]);
+	wordfree(&exp_result);
+
+	// Check postprocess.h in the current working directory
 	sprintf(script, "%s", filename);
 	if (access(script, F_OK) != -1) {
 		sprintf(script, "./%s", filename);
@@ -70,7 +81,7 @@ find_processor(char *script)
 	}
 
 	// Check for a script in XDG_CONFIG_HOME
-	sprintf(script, "%s/megapixels/%s", g_get_user_config_dir (), filename);
+	sprintf(script, "%s/megapixels/%s", xdg_config_home, filename);
 	if (access(script, F_OK) != -1) {
 		printf("Found postprocessor script at %s\n", script);
 		return true;
