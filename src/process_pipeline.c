@@ -14,7 +14,6 @@
 
 #include "gl_util.h"
 #include <sys/mman.h>
-#include <drm/drm_fourcc.h>
 
 #define TIFFTAG_FORWARDMATRIX1 50964
 

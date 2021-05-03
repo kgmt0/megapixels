@@ -184,7 +184,7 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
 	zbar_image_t *zbar_image = zbar_image_create();
 	zbar_image_set_format(zbar_image, zbar_fourcc('Y', '8', '0', '0'));
 	zbar_image_set_size(zbar_image, width, height);
-	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t), zbar_image_free_data);
+	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t), NULL);
 
 	int res = zbar_scan_image(scanner, zbar_image);
 	assert(res >= 0);
