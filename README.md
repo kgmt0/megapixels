@@ -1,6 +1,7 @@
 # Megapixels
 
-A GTK3 camera application that knows how to deal with the media request api
+A GTK4 camera application that knows how to deal with the media request api. It uses
+opengl to debayer the raw sensor data for the preview.
 
 chat: #megapixels:postmarketos.org on matrix
 
