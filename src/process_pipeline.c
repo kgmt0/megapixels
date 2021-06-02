@@ -435,11 +435,9 @@ process_image_for_capture(const uint8_t *image, int count)
 	TIFFCheckpointDirectory(tif);
 	printf("Writing frame to %s\n", fname);
 
-	unsigned char *pLine = (unsigned char *)malloc(mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width));
 	for (int row = 0; row < mode.height; row++) {
 		TIFFWriteScanline(tif, (void *) image + (row * mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width)), row, 0);
 	}
-	free(pLine);
 	TIFFWriteDirectory(tif);
 
 	// Add an EXIF block to the tiff
