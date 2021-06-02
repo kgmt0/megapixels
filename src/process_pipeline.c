@@ -413,7 +413,7 @@ process_image_for_capture(const uint8_t *image, int count)
 	TIFFSetField(tif, TIFFTAG_SUBFILETYPE, 0);
 	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, mode.width);
 	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, mode.height);
-	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 8);
+	TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, mp_pixel_format_bits_per_pixel(mode.pixel_format));
 	TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_CFA);
 	TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
 	TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
@@ -435,9 +435,9 @@ process_image_for_capture(const uint8_t *image, int count)
 	TIFFCheckpointDirectory(tif);
 	printf("Writing frame to %s\n", fname);
 
-	unsigned char *pLine = (unsigned char *)malloc(mode.width);
+	unsigned char *pLine = (unsigned char *)malloc(mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width));
 	for (int row = 0; row < mode.height; row++) {
-		TIFFWriteScanline(tif, (void *) image + (row * mode.width), row, 0);
+		TIFFWriteScanline(tif, (void *) image + (row * mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width)), row, 0);
 	}
 	free(pLine);
 	TIFFWriteDirectory(tif);
