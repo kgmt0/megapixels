@@ -457,6 +457,19 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 }
 
 void
+run_about_action(GSimpleAction *action, GVariant *param, GApplication *app)
+{
+	gtk_show_about_dialog(NULL, "program-name", "Megapixels",
+			"title", "Megapixels",
+			"logo-icon-name", "org.postmarketos.Megapixels",
+			"comments", "The postmarketOS camera application",
+			"website", "https://sr.ht/~martijnbraam/megapixels",
+			"version", VERSION,
+			"license-type", GTK_LICENSE_GPL_3_0_ONLY,
+			NULL);
+}
+
+void
 run_quit_action(GSimpleAction *action, GVariant *param, GApplication *app)
 {
 	g_application_quit(app);
@@ -889,6 +902,7 @@ activate(GtkApplication *app, gpointer data)
 	create_simple_action(app, "close-settings", G_CALLBACK(run_close_settings_action));
 	create_simple_action(app, "open-last", G_CALLBACK(run_open_last_action));
 	create_simple_action(app, "open-photos", G_CALLBACK(run_open_photos_action));
+	create_simple_action(app, "about", G_CALLBACK(run_about_action));
 	create_simple_action(app, "quit", G_CALLBACK(run_quit_action));
 
 	// Setup shortcuts

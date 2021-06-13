@@ -1,4 +1,4 @@
-project('megapixels', 'c')
+project('megapixels', 'c', version: '1.1.0')
 
 gnome = import('gnome')
 gtkdep = dependency('gtk4')
@@ -19,6 +19,8 @@ conf.set_quoted('SYSCONFDIR', get_option('sysconfdir'))
 configure_file(
   output: 'config.h',
   configuration: conf)
+
+add_global_arguments('-DVERSION="@0@"'.format(meson.project_version()), language: 'c')
 
 # Define DEBUG for debug builds only (debugoptimized is not included on this one)
 if get_option('buildtype') == 'debug'
