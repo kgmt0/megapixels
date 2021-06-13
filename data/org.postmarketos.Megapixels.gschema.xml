@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<schemalist>
+  <schema path="/org/postmarketos/megapixels/" id="org.postmarketos.Megapixels">
+    <key name="save-raw" type='b'>
+      <default>true</default>
+      <summary>Don't throw away the .dng file after post processing</summary>
+      <description>
+        Megapixels will write a .dng file that's passed to the post processing script
+        if this setting is disabled the post-process script will be told to clean it
+        up after processing.
+      </description>
+    </key>
+  </schema>
+</schemalist>

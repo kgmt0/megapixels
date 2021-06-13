@@ -8,16 +8,22 @@
 # The second argument is the filename for the final photo without
 # the extension, like "/home/user/Pictures/IMG202104031234" 
 #
+# The third argument is 1 or 0 for the cleanup user config. If this
+# is 0 the .dng file should not be moved to the output directory
+#
 # The post-processing script is responsible for cleaning up
 # temporary directory for the burst.
 
-if [ "$#" -ne 2 ]; then
-	echo "Usage: $0 [burst-dir] [target-name]"
+set -e
+
+if [ "$#" -ne 3 ]; then
+	echo "Usage: $0 [burst-dir] [target-name] [save-dng]"
 	exit 2
 fi
 
 BURST_DIR="$1"
 TARGET_NAME="$2"
+SAVE_DNG="$3"
 
 MAIN_PICTURE="$BURST_DIR"/1
 
@@ -92,3 +98,7 @@ fi
 # Clean up the temp dir containing the burst
 rm -rf "$BURST_DIR"
 
+# Clean up the .dng if the user didn't want it
+if [ "$SAVE_DNG" -eq "0" ]; then
+	rm "$TARGET_NAME.dng"
+fi

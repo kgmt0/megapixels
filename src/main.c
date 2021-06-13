@@ -71,6 +71,9 @@ GtkWidget *process_spinner;
 GtkWidget *scanned_codes;
 GtkWidget *preview_top_box;
 GtkWidget *preview_bottom_box;
+GtkWidget *setting_dng;
+
+GSettings *settings;
 
 int
 remap(int value, int input_min, int input_max, int output_min, int output_max)
@@ -102,6 +105,7 @@ update_io_pipeline()
 		.gain = gain,
 		.exposure_is_manual = exposure_is_manual,
 		.exposure = exposure,
+		.save_dng = gtk_check_button_get_active(GTK_CHECK_BUTTON(setting_dng)),
 	};
 	mp_io_pipeline_update_state(&io_state);
 }
@@ -453,6 +457,7 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_spinner_start(GTK_SPINNER(process_spinner));
 	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), process_spinner);
+	update_io_pipeline();
 	mp_io_pipeline_capture();
 }
 
@@ -883,6 +888,8 @@ activate(GtkApplication *app, gpointer data)
 	preview_top_box = GTK_WIDGET(gtk_builder_get_object(builder, "top-box"));
 	preview_bottom_box = GTK_WIDGET(gtk_builder_get_object(builder, "bottom-box"));
 
+	setting_dng = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
+
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 
 	g_signal_connect(preview, "realize", G_CALLBACK(preview_realize), NULL);
@@ -911,6 +918,10 @@ activate(GtkApplication *app, gpointer data)
 
 	const char *quit_accels[] = { "<Ctrl>q", "<Ctrl>w", NULL };
 	gtk_application_set_accels_for_action(app, "app.quit", quit_accels);
+
+	// Setup settings
+	settings = g_settings_new("org.postmarketos.Megapixels");
+	g_settings_bind (settings, "save-raw", setting_dng, "active", G_SETTINGS_BIND_DEFAULT);
 
 	// Listen for phosh rotation
 	GDBusConnection *conn = g_application_get_dbus_connection(G_APPLICATION(app));

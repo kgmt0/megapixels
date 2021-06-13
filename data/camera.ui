@@ -238,6 +238,11 @@
                             </child>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkCheckButton" id="setting-raw">
+                            <property name="label">Save raw files</property>
+                          </object>
+                        </child>
                       </object>
                     </property>
                   </object>

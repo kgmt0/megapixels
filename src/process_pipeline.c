@@ -51,6 +51,8 @@ static int gain_max;
 static bool exposure_is_manual;
 static int exposure;
 
+static bool save_dng;
+
 static char capture_fname[255];
 
 static void
@@ -533,9 +535,13 @@ process_capture_burst(GdkTexture *thumb)
 			timestamp);
 	}
 
+	char save_dng_s[2] = "0";
+	if (save_dng) {
+		save_dng_s[0] = '1';
+	}
 
 	// Start post-processing the captured burst
-	g_print("Post process %s to %s.ext\n", burst_dir, capture_fname);
+	g_print("Post process %s to %s.ext (save-dng %s)\n", burst_dir, capture_fname, save_dng_s);
 	GError *error = NULL;
 	GSubprocess *proc = g_subprocess_new(
 		G_SUBPROCESS_FLAGS_STDOUT_PIPE,
@@ -543,6 +549,7 @@ process_capture_burst(GdkTexture *thumb)
 		processing_script,
 		burst_dir,
 		capture_fname,
+		save_dng_s,
 		NULL);
 
 	if (!proc) {
@@ -707,6 +714,7 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
 	device_rotation = state->device_rotation;
 
 	burst_length = state->burst_length;
+	save_dng = state->save_dng;
 
 	// gain_is_manual = state->gain_is_manual;
 	gain = state->gain;
