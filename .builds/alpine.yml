@@ -2,7 +2,7 @@ image: alpine/edge
 packages:
   - meson
   - samurai
-  - gtk+3.0-dev
+  - gtk4.0-dev
   - tiff-dev
   - zbar-dev
 tasks:

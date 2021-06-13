@@ -2,7 +2,7 @@ image: archlinux
 packages:
   - meson
   - ninja
-  - gtk3
+  - gtk4
   - zbar
 tasks:
   - build: |
