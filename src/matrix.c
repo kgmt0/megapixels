@@ -1,4 +1,7 @@
-void print_matrix(float m[9])
+#include <stdio.h>
+
+void
+print_matrix(float m[9])
 {
 	printf(" [%.2f  %.2f  %.2f] \n", m[0], m[1], m[2]);
 	printf(" [%.2f  %.2f  %.2f] \n", m[3], m[4], m[5]);
