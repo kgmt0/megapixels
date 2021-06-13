@@ -23,12 +23,13 @@ void main() {
 	// Assume BGGR for now. Currently this just takes 3 of the four samples
 	// for each pixel, there's room here to do some better debayering.
 	vec3 color = vec3(samples.w, (samples.y + samples.z) / 2.0, samples.x);
+	vec3 corrected = color * color_matrix;
 
 	// Fast SRGB estimate. See https://mimosa-pudica.net/fast-gamma/
-	vec3 srgb_color = (vec3(1.138) * inversesqrt(color) - vec3(0.138)) * color;
+	vec3 srgb_color = (vec3(1.138) * inversesqrt(corrected) - vec3(0.138)) * corrected;
 
 	// Slow SRGB estimate
 	// vec3 srgb_color = pow(color, vec3(1.0 / 2.2));
 
-	gl_FragColor = vec4(color_matrix * srgb_color, 1);
+	gl_FragColor = vec4(srgb_color, 1);
 }
