@@ -23,7 +23,12 @@ void main() {
 	// Assume BGGR for now. Currently this just takes 3 of the four samples
 	// for each pixel, there's room here to do some better debayering.
 	vec3 color = vec3(samples.w, (samples.y + samples.z) / 2.0, samples.x);
-	vec3 corrected = color * color_matrix;
+
+	// Some crude blacklevel correction to make the preview a bit nicer, this should be an uniform
+	vec3 corrected = color - 0.02;
+
+	// Apply the color matrices
+	//vec3 corrected = color_matrix * color2;
 
 	// Fast SRGB estimate. See https://mimosa-pudica.net/fast-gamma/
 	vec3 srgb_color = (vec3(1.138) * inversesqrt(corrected) - vec3(0.138)) * corrected;
