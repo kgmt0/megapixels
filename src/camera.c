@@ -123,6 +123,28 @@ mp_pixel_format_bits_per_pixel(MPPixelFormat pixel_format)
 }
 
 uint32_t
+mp_pixel_format_pixel_depth(MPPixelFormat pixel_format)
+{
+	g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+	switch (pixel_format) {
+	case MP_PIXEL_FMT_BGGR8:
+	case MP_PIXEL_FMT_GBRG8:
+	case MP_PIXEL_FMT_GRBG8:
+	case MP_PIXEL_FMT_RGGB8:
+	case MP_PIXEL_FMT_UYVY:
+	case MP_PIXEL_FMT_YUYV:
+		return 8;
+	case MP_PIXEL_FMT_GBRG10P:
+	case MP_PIXEL_FMT_GRBG10P:
+	case MP_PIXEL_FMT_RGGB10P:
+	case MP_PIXEL_FMT_BGGR10P:
+		return 10;
+	default:
+		return 0;
+	}
+}
+
+uint32_t
 mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width)
 {
 	uint32_t bits_per_pixel = mp_pixel_format_bits_per_pixel(pixel_format);

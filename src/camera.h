@@ -30,6 +30,7 @@ uint32_t mp_pixel_format_to_v4l_pixel_format(MPPixelFormat pixel_format);
 uint32_t mp_pixel_format_to_v4l_bus_code(MPPixelFormat pixel_format);
 
 uint32_t mp_pixel_format_bits_per_pixel(MPPixelFormat pixel_format);
+uint32_t mp_pixel_format_pixel_depth(MPPixelFormat pixel_format);
 uint32_t mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width);
 uint32_t mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width);
 uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format,
