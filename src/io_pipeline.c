@@ -364,6 +364,25 @@ void mp_io_pipeline_release_buffer(uint32_t buffer_index)
 	mp_pipeline_invoke(pipeline, (MPPipelineCallback) release_buffer, &buffer_index, sizeof(uint32_t));
 }
 
+static pid_t focus_continuous_task = 0;
+static pid_t start_focus_task = 0;
+static void
+start_focus(struct camera_info *info)
+{
+	// only run 1 manual focus at once
+	if (!mp_camera_check_task_complete(info->camera, start_focus_task)
+	 || !mp_camera_check_task_complete(info->camera, focus_continuous_task))
+		return;
+
+	if (info->has_auto_focus_continuous) {
+		focus_continuous_task = mp_camera_control_set_bool_bg(info->camera,
+						V4L2_CID_FOCUS_AUTO, 1);
+	} else if (info->has_auto_focus_start) {
+		start_focus_task = mp_camera_control_set_bool_bg(info->camera,
+						V4L2_CID_AUTO_FOCUS_START, 1);
+	}
+}
+
 static void
 update_controls()
 {
@@ -375,14 +394,7 @@ update_controls()
 	struct camera_info *info = &cameras[camera->index];
 
 	if (want_focus) {
-		if (info->has_auto_focus_continuous) {
-			mp_camera_control_set_bool_bg(info->camera, V4L2_CID_FOCUS_AUTO,
-						   1);
-		} else if (info->has_auto_focus_start) {
-			mp_camera_control_set_bool_bg(info->camera,
-						   V4L2_CID_AUTO_FOCUS_START, 1);
-		}
-
+		start_focus(info);
 		want_focus = false;
 	}
 
