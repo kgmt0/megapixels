@@ -1,6 +1,7 @@
 #pragma once
 
 #include <linux/v4l2-subdev.h>
+#include <sys/wait.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -55,6 +56,10 @@ typedef struct _MPCamera MPCamera;
 
 MPCamera *mp_camera_new(int video_fd, int subdev_fd);
 void mp_camera_free(MPCamera *camera);
+
+void mp_camera_add_bg_task(MPCamera *camera, pid_t pid);
+void mp_camera_wait_bg_tasks(MPCamera *camera);
+bool mp_camera_check_task_complete(MPCamera *camera, pid_t pid);
 
 bool mp_camera_is_subdev(MPCamera *camera);
 int mp_camera_get_video_fd(MPCamera *camera);
@@ -112,10 +117,10 @@ bool mp_camera_control_try_int32(MPCamera *camera, uint32_t id, int32_t *v);
 bool mp_camera_control_set_int32(MPCamera *camera, uint32_t id, int32_t v);
 int32_t mp_camera_control_get_int32(MPCamera *camera, uint32_t id);
 // set the value in the background, discards result
-void mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v);
+pid_t mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v);
 
 bool mp_camera_control_try_bool(MPCamera *camera, uint32_t id, bool *v);
 bool mp_camera_control_set_bool(MPCamera *camera, uint32_t id, bool v);
 bool mp_camera_control_get_bool(MPCamera *camera, uint32_t id);
 // set the value in the background, discards result
-void mp_camera_control_set_bool_bg(MPCamera *camera, uint32_t id, bool v);
+pid_t mp_camera_control_set_bool_bg(MPCamera *camera, uint32_t id, bool v);

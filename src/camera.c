@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define MAX_VIDEO_BUFFERS 20
+#define MAX_BG_TASKS 8
 
 static const char *pixel_format_names[MP_PIXEL_FMT_MAX] = {
 	"unsupported", "BGGR8",	  "GBRG8",   "GRBG8", "RGGB8", "BGGR10P",
@@ -219,6 +221,9 @@ struct _MPCamera {
 	struct video_buffer buffers[MAX_VIDEO_BUFFERS];
 	uint32_t num_buffers;
 
+	// keeping track of background task child-PIDs for cleanup code
+	int child_bg_pids[MAX_BG_TASKS];
+
 	bool use_mplane;
 };
 
@@ -250,18 +255,98 @@ mp_camera_new(int video_fd, int subdev_fd)
 	camera->has_set_mode = false;
 	camera->num_buffers = 0;
 	camera->use_mplane = use_mplane;
+	memset(camera->child_bg_pids, 0, sizeof(camera->child_bg_pids[0]) * MAX_BG_TASKS);
 	return camera;
 }
 
 void
 mp_camera_free(MPCamera *camera)
 {
+	mp_camera_wait_bg_tasks(camera);
+
 	g_warn_if_fail(camera->num_buffers == 0);
 	if (camera->num_buffers != 0) {
 		mp_camera_stop_capture(camera);
 	}
 
 	free(camera);
+}
+
+void
+mp_camera_add_bg_task(MPCamera *camera, pid_t pid)
+{
+	int status;
+	while (true) {
+		for (size_t i = 0; i < MAX_BG_TASKS; ++i) {
+			if (camera->child_bg_pids[i] == 0) {
+				camera->child_bg_pids[i] = pid;
+				return;
+			} else {
+				// error == -1, still running == 0
+				if (waitpid(camera->child_bg_pids[i], &status, WNOHANG) <= 0)
+					continue; // consider errored wait still running
+
+				if (WIFEXITED(status)) {
+					// replace exited
+					camera->child_bg_pids[i] = pid;
+					return;
+				}
+			}
+		}
+
+		// wait for any status change on child processes
+		pid_t changed = waitpid(-1, &status, 0);
+		if (WIFEXITED(status)) {
+			// some child exited
+			for (size_t i = 0; i < MAX_BG_TASKS; ++i) {
+				if (camera->child_bg_pids[i] == changed) {
+					camera->child_bg_pids[i] = pid;
+					return;
+				}
+			}
+		}
+
+		// no luck, repeat and check if something exited maybe
+	}
+}
+
+void
+mp_camera_wait_bg_tasks(MPCamera *camera)
+{
+	for (size_t i = 0; i < MAX_BG_TASKS; ++i) {
+		if (camera->child_bg_pids[i] != 0) {
+			// ignore errors
+			waitpid(camera->child_bg_pids[i], NULL, 0);
+		}
+	}
+}
+
+bool
+mp_camera_check_task_complete(MPCamera *camera, pid_t pid)
+{
+	// this method is potentially unsafe because pid could already be reused at
+	// this point, but extremely unlikely so we won't implement this.
+	int status;
+
+	if (pid == 0)
+		return true;
+
+	// ignore errors (-1), no exit == 0
+	int pidchange = waitpid(pid, &status, WNOHANG);
+	if (pidchange == -1) // error or exists and runs
+		return false;
+
+	if (WIFEXITED(status)) {
+		for (size_t i = 0; i < MAX_BG_TASKS; ++i) {
+			if (camera->child_bg_pids[i] == pid) {
+				camera->child_bg_pids[i] = 0;
+				break;
+			}
+		}
+		return true;
+	} else {
+		return false;
+	}
 }
 
 bool
@@ -1178,7 +1263,7 @@ control_impl_int32(MPCamera *camera, uint32_t id, int request, int32_t *value)
 	return true;
 }
 
-void
+pid_t
 mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v)
 {
 	struct v4l2_ext_control ctrl = {};
@@ -1195,8 +1280,15 @@ mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v)
 	int fd = control_fd(camera);
 
 	// fork only after all the memory has been read
-	if (fork() != 0)
-		return; // discard errors, nothing to do in parent process
+	pid_t pid = fork();
+	if (pid == -1) {
+		return 0; // discard errors, nothing to do in parent process
+	} else if (pid != 0) {
+		// parent process adding pid to wait list (to clear zombie processes)
+		mp_camera_add_bg_task(camera, pid);
+		return pid;
+	}
+
 	// ignore errors
 	xioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls);
 	// exit without calling exit handlers
@@ -1247,7 +1339,7 @@ mp_camera_control_get_bool(MPCamera *camera, uint32_t id)
 	return v;
 }
 
-void
+pid_t
 mp_camera_control_set_bool_bg(MPCamera *camera, uint32_t id, bool v)
 {
 	int32_t value = v;
