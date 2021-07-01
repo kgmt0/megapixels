@@ -1178,6 +1178,31 @@ control_impl_int32(MPCamera *camera, uint32_t id, int request, int32_t *value)
 	return true;
 }
 
+void
+mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v)
+{
+	struct v4l2_ext_control ctrl = {};
+	ctrl.id = id;
+	ctrl.value = v;
+
+	struct v4l2_ext_controls ctrls = {
+		.ctrl_class = 0,
+		.which = V4L2_CTRL_WHICH_CUR_VAL,
+		.count = 1,
+		.controls = &ctrl,
+	};
+
+	int fd = control_fd(camera);
+
+	// fork only after all the memory has been read
+	if (fork() != 0)
+		return; // discard errors, nothing to do in parent process
+	// ignore errors
+	xioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls);
+	// exit without calling exit handlers
+	_exit(0);
+}
+
 bool
 mp_camera_control_try_int32(MPCamera *camera, uint32_t id, int32_t *v)
 {
@@ -1220,4 +1245,11 @@ mp_camera_control_get_bool(MPCamera *camera, uint32_t id)
 	int32_t v = false;
 	control_impl_int32(camera, id, VIDIOC_G_EXT_CTRLS, &v);
 	return v;
+}
+
+void
+mp_camera_control_set_bool_bg(MPCamera *camera, uint32_t id, bool v)
+{
+	int32_t value = v;
+	return mp_camera_control_set_int32_bg(camera, id, value);
 }

@@ -199,7 +199,7 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 		if (mp_camera_query_control(info->camera, V4L2_CID_FOCUS_AUTO,
 					    NULL)) {
 			info->has_auto_focus_continuous = true;
-			mp_camera_control_set_bool(info->camera, V4L2_CID_FOCUS_AUTO,
+			mp_camera_control_set_bool_bg(info->camera, V4L2_CID_FOCUS_AUTO,
 						   true);
 		}
 		if (mp_camera_query_control(info->camera, V4L2_CID_AUTO_FOCUS_START,
@@ -362,10 +362,10 @@ update_controls()
 
 	if (want_focus) {
 		if (info->has_auto_focus_continuous) {
-			mp_camera_control_set_bool(info->camera, V4L2_CID_FOCUS_AUTO,
+			mp_camera_control_set_bool_bg(info->camera, V4L2_CID_FOCUS_AUTO,
 						   1);
 		} else if (info->has_auto_focus_start) {
-			mp_camera_control_set_bool(info->camera,
+			mp_camera_control_set_bool_bg(info->camera,
 						   V4L2_CID_AUTO_FOCUS_START, 1);
 		}
 
@@ -373,19 +373,19 @@ update_controls()
 	}
 
 	if (current_controls.gain_is_manual != desired_controls.gain_is_manual) {
-		mp_camera_control_set_bool(info->camera, V4L2_CID_AUTOGAIN,
+		mp_camera_control_set_bool_bg(info->camera, V4L2_CID_AUTOGAIN,
 					   !desired_controls.gain_is_manual);
 	}
 
 	if (desired_controls.gain_is_manual &&
 	    current_controls.gain != desired_controls.gain) {
-		mp_camera_control_set_int32(info->camera, info->gain_ctrl,
+		mp_camera_control_set_int32_bg(info->camera, info->gain_ctrl,
 					    desired_controls.gain);
 	}
 
 	if (current_controls.exposure_is_manual !=
 	    desired_controls.exposure_is_manual) {
-		mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE_AUTO,
+		mp_camera_control_set_int32_bg(info->camera, V4L2_CID_EXPOSURE_AUTO,
 					    desired_controls.exposure_is_manual ?
 						    V4L2_EXPOSURE_MANUAL :
 						    V4L2_EXPOSURE_AUTO);
@@ -393,7 +393,7 @@ update_controls()
 
 	if (desired_controls.exposure_is_manual &&
 	    current_controls.exposure != desired_controls.exposure) {
-		mp_camera_control_set_int32(info->camera, V4L2_CID_EXPOSURE,
+		mp_camera_control_set_int32_bg(info->camera, V4L2_CID_EXPOSURE,
 					    desired_controls.exposure);
 	}
 
@@ -444,13 +444,13 @@ on_frame(MPBuffer buffer, void * _data)
 
 			// Restore the auto exposure and gain if needed
 			if (!current_controls.exposure_is_manual) {
-				mp_camera_control_set_int32(info->camera,
+				mp_camera_control_set_int32_bg(info->camera,
 							    V4L2_CID_EXPOSURE_AUTO,
 							    V4L2_EXPOSURE_AUTO);
 			}
 
 			if (!current_controls.gain_is_manual) {
-				mp_camera_control_set_bool(info->camera,
+				mp_camera_control_set_bool_bg(info->camera,
 							   V4L2_CID_AUTOGAIN, true);
 			}
 

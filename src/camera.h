@@ -111,7 +111,11 @@ bool mp_camera_query_control(MPCamera *camera, uint32_t id, MPControl *control);
 bool mp_camera_control_try_int32(MPCamera *camera, uint32_t id, int32_t *v);
 bool mp_camera_control_set_int32(MPCamera *camera, uint32_t id, int32_t v);
 int32_t mp_camera_control_get_int32(MPCamera *camera, uint32_t id);
+// set the value in the background, discards result
+void mp_camera_control_set_int32_bg(MPCamera *camera, uint32_t id, int32_t v);
 
 bool mp_camera_control_try_bool(MPCamera *camera, uint32_t id, bool *v);
 bool mp_camera_control_set_bool(MPCamera *camera, uint32_t id, bool v);
 bool mp_camera_control_get_bool(MPCamera *camera, uint32_t id);
+// set the value in the background, discards result
+void mp_camera_control_set_bool_bg(MPCamera *camera, uint32_t id, bool v);
