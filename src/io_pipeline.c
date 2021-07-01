@@ -236,6 +236,18 @@ setup(MPPipeline *pipeline, const void *data)
 	mp_device_list_free(device_list);
 }
 
+static void
+clean_cameras()
+{
+	for (size_t i = 0; i < MP_MAX_CAMERAS; ++i) {
+		struct camera_info* info = &cameras[i];
+		if (info->camera) {
+			mp_camera_free(info->camera);
+			info->camera = NULL;
+		}
+	}
+}
+
 void
 mp_io_pipeline_start()
 {
@@ -252,6 +264,8 @@ mp_io_pipeline_stop()
 	if (capture_source) {
 		g_source_destroy(capture_source);
 	}
+
+	clean_cameras();
 
 	mp_pipeline_free(pipeline);
 
