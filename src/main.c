@@ -525,7 +525,8 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 void
 run_about_action(GSimpleAction *action, GVariant *param, GApplication *app)
 {
-        gtk_show_about_dialog(NULL,
+        GtkWindow *parent = gtk_application_get_active_window(GTK_APPLICATION(app));
+        gtk_show_about_dialog(parent,
                               "program-name",
                               "Megapixels",
                               "title",
