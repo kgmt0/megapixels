@@ -73,8 +73,9 @@ if [ -n "$DCRAW" ]; then
 	if [ -n "$CONVERT" ];
 	then
 		if [ "$CONVERT" = "convert" ]; then
-			convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
+			convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 -sigmoidal-contrast 6,50% "$TARGET_NAME.jpg"
 		else
+			# sadly sigmoidal contrast is not available in imagemagick
 			gm convert "$MAIN_PICTURE.$TIFF_EXT" -sharpen 0x1.0 "$TARGET_NAME.jpg"
 		fi
 
