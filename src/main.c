@@ -557,9 +557,13 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 			flags,
 			GTK_MESSAGE_QUESTION,
 			GTK_BUTTONS_NONE,
-			"Found '%s' encoded in a %s.",
-			code->data,
+			"Found data encoded in a %s.",
 			code->type);
+		gtk_message_dialog_format_secondary_markup (
+			GTK_DIALOG(dialog),
+			"<small>%s</small>",
+			code->data
+			);
 	}
 	gtk_dialog_add_buttons(
 		GTK_DIALOG(dialog),
