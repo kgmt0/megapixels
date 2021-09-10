@@ -543,7 +543,7 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 			flags,
 			GTK_MESSAGE_QUESTION,
 			GTK_BUTTONS_NONE,
-			"Found a URL '%s' encoded in a %s code.",
+			"Found a URL '%s' encoded in a %s.",
 			code->data,
 			code->type);
 		gtk_dialog_add_buttons(
@@ -557,7 +557,7 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 			flags,
 			GTK_MESSAGE_QUESTION,
 			GTK_BUTTONS_NONE,
-			"Found '%s' encoded in a %s code.",
+			"Found '%s' encoded in a %s.",
 			code->data,
 			code->type);
 	}
