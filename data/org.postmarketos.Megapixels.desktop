@@ -6,3 +6,4 @@ Type=Application
 Categories=GTK;
 Icon=org.postmarketos.Megapixels
 X-Purism-FormFactor=Workstation;Mobile;
+StartupNotify=true
