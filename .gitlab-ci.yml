@@ -1,0 +1,18 @@
+.build_template: &build_definition
+  script:
+    - meson build
+    - ninja -C build
+    - ninja -C build test
+
+build:debian:
+  image: debian:bookworm-slim
+  before_script:
+    - apt update && apt -y install gcc meson ninja-build libgtk-4-dev libtiff-dev libzbar-dev
+  <<: *build_definition
+
+build:alpine:
+  image: alpine:edge
+  before_script:
+    - apk add --no-cache build-base meson samurai gtk4.0-dev tiff-dev zbar-dev
+  <<: *build_definition
+
