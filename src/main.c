@@ -52,6 +52,8 @@ static int exposure;
 static bool has_auto_focus_continuous;
 static bool has_auto_focus_start;
 
+static bool setting_save_dng;
+
 static MPProcessPipelineBuffer *current_preview_buffer = NULL;
 static int preview_buffer_width = -1;
 static int preview_buffer_height = -1;
@@ -71,7 +73,6 @@ GtkWidget *process_spinner;
 GtkWidget *scanned_codes;
 GtkWidget *preview_top_box;
 GtkWidget *preview_bottom_box;
-GtkWidget *setting_dng;
 
 GSettings *settings;
 
@@ -105,7 +106,7 @@ update_io_pipeline()
 		.gain = gain,
 		.exposure_is_manual = exposure_is_manual,
 		.exposure = exposure,
-		.save_dng = gtk_check_button_get_active(GTK_CHECK_BUTTON(setting_dng)),
+		.save_dng = setting_save_dng,
 	};
 	mp_io_pipeline_update_state(&io_state);
 }
@@ -457,7 +458,6 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_spinner_start(GTK_SPINNER(process_spinner));
 	gtk_stack_set_visible_child(GTK_STACK(open_last_stack), process_spinner);
-	update_io_pipeline();
 	mp_io_pipeline_capture();
 }
 
@@ -635,6 +635,15 @@ static void
 run_close_settings_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
 	gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "main");
+
+	// Update settings
+	bool save_dng = g_settings_get_boolean(settings, "save-raw");
+
+	if (save_dng != setting_save_dng)
+	{
+		setting_save_dng = save_dng;
+		update_io_pipeline();
+	}
 }
 
 static void
@@ -883,6 +892,7 @@ activate(GtkApplication *app, gpointer data)
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *iso_button = GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
 	GtkWidget *shutter_button = GTK_WIDGET(gtk_builder_get_object(builder, "shutter-controls-button"));
+	GtkWidget *setting_dng_button = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
 	open_last_stack = GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
@@ -891,8 +901,6 @@ activate(GtkApplication *app, gpointer data)
 	scanned_codes = GTK_WIDGET(gtk_builder_get_object(builder, "scanned-codes"));
 	preview_top_box = GTK_WIDGET(gtk_builder_get_object(builder, "top-box"));
 	preview_bottom_box = GTK_WIDGET(gtk_builder_get_object(builder, "bottom-box"));
-
-	setting_dng = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
 
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 
@@ -925,7 +933,9 @@ activate(GtkApplication *app, gpointer data)
 
 	// Setup settings
 	settings = g_settings_new("org.postmarketos.Megapixels");
-	g_settings_bind (settings, "save-raw", setting_dng, "active", G_SETTINGS_BIND_DEFAULT);
+	g_settings_bind (settings, "save-raw", setting_dng_button, "active", G_SETTINGS_BIND_DEFAULT);
+
+	setting_save_dng = g_settings_get_boolean(settings, "save-raw");
 
 	// Listen for phosh rotation
 	GDBusConnection *conn = g_application_get_dbus_connection(G_APPLICATION(app));
