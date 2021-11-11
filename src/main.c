@@ -1,27 +1,28 @@
 #include "main.h"
 
+#include "camera_config.h"
+#include "flash.h"
+#include "gl_util.h"
+#include "io_pipeline.h"
+#include "process_pipeline.h"
+#include <asm/errno.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/videodev2.h>
+#include <gtk/gtk.h>
+#include <limits.h>
+#include <linux/kdev_t.h>
 #include <linux/media.h>
 #include <linux/v4l2-subdev.h>
+#include <linux/videodev2.h>
+#include <locale.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <time.h>
-#include <assert.h>
-#include <limits.h>
-#include <linux/kdev_t.h>
 #include <sys/sysmacros.h>
-#include <asm/errno.h>
+#include <time.h>
 #include <wordexp.h>
-#include <gtk/gtk.h>
-#include <locale.h>
 #include <zbar.h>
-#include "gl_util.h"
-#include "camera_config.h"
-#include "io_pipeline.h"
-#include "process_pipeline.h"
 
 #define RENDERDOC
 
@@ -970,6 +971,9 @@ activate(GtkApplication *app, gpointer data)
 		NULL);
 	update_screen_rotation(conn);
 
+	// Initialize display flash
+	mp_flash_gtk_init(conn);
+
 	mp_io_pipeline_start();
 
 	gtk_application_add_window(app, GTK_WINDOW(window));
@@ -982,6 +986,7 @@ shutdown(GApplication *app, gpointer data)
 	// Only do cleanup in development, let the OS clean up otherwise
 #ifdef DEBUG
 	mp_io_pipeline_stop();
+	mp_flash_gtk_clean();
 #endif
 }
 
