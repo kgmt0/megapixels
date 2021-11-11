@@ -819,6 +819,7 @@ static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gp
 
 	if (!result) {
 		printf("Failed to get display configuration: %s\n", error->message);
+		g_object_unref(error);
 		return;
 	}
 
@@ -839,6 +840,8 @@ static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gp
 		update_io_pipeline();
 		update_ui_rotation();
 	}
+
+	g_variant_unref(result);
 }
 
 static void update_screen_rotation(GDBusConnection *conn)
