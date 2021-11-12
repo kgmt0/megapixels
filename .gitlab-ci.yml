@@ -1,9 +1,3 @@
-.build_template: &build_definition
-  script:
-    - meson build
-    - ninja -C build
-    - ninja -C build test
-
 build:debian:
   image: debian:bookworm-slim
   before_script:

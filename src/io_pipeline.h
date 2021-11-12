@@ -3,23 +3,23 @@
 #include "camera_config.h"
 
 struct mp_io_pipeline_state {
-	const struct mp_camera_config *camera;
+        const struct mp_camera_config *camera;
 
-	int burst_length;
+        int burst_length;
 
-	int preview_width;
-	int preview_height;
+        int preview_width;
+        int preview_height;
 
-	int device_rotation;
+        int device_rotation;
 
-	bool gain_is_manual;
-	int gain;
+        bool gain_is_manual;
+        int gain;
 
-	bool exposure_is_manual;
-	int exposure;
+        bool exposure_is_manual;
+        int exposure;
 
-	bool save_dng;
-	bool flash_enabled;
+        bool save_dng;
+        bool flash_enabled;
 };
 
 void mp_io_pipeline_start();

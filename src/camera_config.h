@@ -9,42 +9,42 @@
 #define MP_MAX_LINKS 10
 
 struct mp_media_link_config {
-	char source_name[100];
-	char target_name[100];
-	int source_port;
-	int target_port;
+        char source_name[100];
+        char target_name[100];
+        int source_port;
+        int target_port;
 };
 
 struct mp_camera_config {
-	size_t index;
+        size_t index;
 
-	char cfg_name[100];
-	char dev_name[260];
-	char media_dev_name[260];
+        char cfg_name[100];
+        char dev_name[260];
+        char media_dev_name[260];
 
-	MPCameraMode capture_mode;
-	MPCameraMode preview_mode;
-	int rotate;
-	bool mirrored;
+        MPCameraMode capture_mode;
+        MPCameraMode preview_mode;
+        int rotate;
+        bool mirrored;
 
-	struct mp_media_link_config media_links[MP_MAX_LINKS];
-	int num_media_links;
+        struct mp_media_link_config media_links[MP_MAX_LINKS];
+        int num_media_links;
 
-	float colormatrix[9];
-	float forwardmatrix[9];
-	float previewmatrix[9];
-	int blacklevel;
-	int whitelevel;
+        float colormatrix[9];
+        float forwardmatrix[9];
+        float previewmatrix[9];
+        int blacklevel;
+        int whitelevel;
 
-	float focallength;
-	float cropfactor;
-	double fnumber;
-	int iso_min;
-	int iso_max;
+        float focallength;
+        float cropfactor;
+        double fnumber;
+        int iso_min;
+        int iso_max;
 
-	char flash_path[260];
-	bool flash_display;
-	bool has_flash;
+        char flash_path[260];
+        bool flash_display;
+        bool has_flash;
 };
 
 bool mp_load_config();

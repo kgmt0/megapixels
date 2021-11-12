@@ -1,24 +1,24 @@
 #pragma once
 
 #include <linux/v4l2-subdev.h>
-#include <sys/wait.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/wait.h>
 
 typedef enum {
-	MP_PIXEL_FMT_UNSUPPORTED,
-	MP_PIXEL_FMT_BGGR8,
-	MP_PIXEL_FMT_GBRG8,
-	MP_PIXEL_FMT_GRBG8,
-	MP_PIXEL_FMT_RGGB8,
-	MP_PIXEL_FMT_BGGR10P,
-	MP_PIXEL_FMT_GBRG10P,
-	MP_PIXEL_FMT_GRBG10P,
-	MP_PIXEL_FMT_RGGB10P,
-	MP_PIXEL_FMT_UYVY,
-	MP_PIXEL_FMT_YUYV,
+        MP_PIXEL_FMT_UNSUPPORTED,
+        MP_PIXEL_FMT_BGGR8,
+        MP_PIXEL_FMT_GBRG8,
+        MP_PIXEL_FMT_GRBG8,
+        MP_PIXEL_FMT_RGGB8,
+        MP_PIXEL_FMT_BGGR10P,
+        MP_PIXEL_FMT_GBRG10P,
+        MP_PIXEL_FMT_GRBG10P,
+        MP_PIXEL_FMT_RGGB10P,
+        MP_PIXEL_FMT_UYVY,
+        MP_PIXEL_FMT_YUYV,
 
-	MP_PIXEL_FMT_MAX,
+        MP_PIXEL_FMT_MAX,
 } MPPixelFormat;
 
 const char *mp_pixel_format_to_str(MPPixelFormat pixel_format);
@@ -34,23 +34,23 @@ uint32_t mp_pixel_format_pixel_depth(MPPixelFormat pixel_format);
 uint32_t mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width);
 uint32_t mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width);
 uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format,
-					  uint32_t height);
+                                          uint32_t height);
 
 typedef struct {
-	MPPixelFormat pixel_format;
+        MPPixelFormat pixel_format;
 
-	struct v4l2_fract frame_interval;
-	uint32_t width;
-	uint32_t height;
+        struct v4l2_fract frame_interval;
+        uint32_t width;
+        uint32_t height;
 } MPCameraMode;
 
 bool mp_camera_mode_is_equivalent(const MPCameraMode *m1, const MPCameraMode *m2);
 
 typedef struct {
-	uint32_t index;
+        uint32_t index;
 
-	uint8_t *data;
-	int fd;
+        uint8_t *data;
+        int fd;
 } MPBuffer;
 
 typedef struct _MPCamera MPCamera;
@@ -85,21 +85,21 @@ MPCameraModeList *mp_camera_mode_list_next(MPCameraModeList *list);
 void mp_camera_mode_list_free(MPCameraModeList *list);
 
 typedef struct {
-	uint32_t id;
-	uint32_t type;
-	char name[32];
+        uint32_t id;
+        uint32_t type;
+        char name[32];
 
-	int32_t min;
-	int32_t max;
-	int32_t step;
-	int32_t default_value;
+        int32_t min;
+        int32_t max;
+        int32_t step;
+        int32_t default_value;
 
-	uint32_t flags;
+        uint32_t flags;
 
-	uint32_t element_size;
-	uint32_t element_count;
-	uint32_t dimensions_count;
-	uint32_t dimensions[V4L2_CTRL_MAX_DIMS];
+        uint32_t element_size;
+        uint32_t element_count;
+        uint32_t dimensions_count;
+        uint32_t dimensions[V4L2_CTRL_MAX_DIMS];
 } MPControl;
 
 const char *mp_control_id_to_str(uint32_t id);

@@ -1,26 +1,26 @@
 #pragma once
 
 #include "camera_config.h"
-#include "zbar_pipeline.h"
-#include "process_pipeline.h"
 #include "gtk/gtk.h"
+#include "process_pipeline.h"
+#include "zbar_pipeline.h"
 
 struct mp_main_state {
-	const struct mp_camera_config *camera;
-	MPCameraMode mode;
+        const struct mp_camera_config *camera;
+        MPCameraMode mode;
 
-	int image_width;
-	int image_height;
+        int image_width;
+        int image_height;
 
-	bool gain_is_manual;
-	int gain;
-	int gain_max;
+        bool gain_is_manual;
+        int gain;
+        int gain_max;
 
-	bool exposure_is_manual;
-	int exposure;
+        bool exposure_is_manual;
+        int exposure;
 
-	bool has_auto_focus_continuous;
-	bool has_auto_focus_start;
+        bool has_auto_focus_continuous;
+        bool has_auto_focus_start;
 };
 
 void mp_main_update_state(const struct mp_main_state *state);

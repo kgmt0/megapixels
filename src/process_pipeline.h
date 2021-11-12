@@ -5,27 +5,27 @@
 typedef struct _GdkSurface GdkSurface;
 
 struct mp_process_pipeline_state {
-	const struct mp_camera_config *camera;
-	MPCameraMode mode;
+        const struct mp_camera_config *camera;
+        MPCameraMode mode;
 
-	int burst_length;
+        int burst_length;
 
-	int preview_width;
-	int preview_height;
+        int preview_width;
+        int preview_height;
 
-	int device_rotation;
+        int device_rotation;
 
-	bool gain_is_manual;
-	int gain;
-	int gain_max;
+        bool gain_is_manual;
+        int gain;
+        int gain_max;
 
-	bool exposure_is_manual;
-	int exposure;
+        bool exposure_is_manual;
+        int exposure;
 
-	bool has_auto_focus_continuous;
-	bool has_auto_focus_start;
+        bool has_auto_focus_continuous;
+        bool has_auto_focus_start;
 
-	bool save_dng;
+        bool save_dng;
 };
 
 void mp_process_pipeline_start();
