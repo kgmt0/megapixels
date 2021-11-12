@@ -560,7 +560,7 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 			"Found data encoded in a %s.",
 			code->type);
 		gtk_message_dialog_format_secondary_markup (
-			GTK_DIALOG(dialog),
+			GTK_MESSAGE_DIALOG(dialog),
 			"<small>%s</small>",
 			code->data
 			);
