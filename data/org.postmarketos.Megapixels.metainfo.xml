@@ -26,6 +26,15 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.4.0" date="2021-11-13">
+			<description>
+				<p>
+					<li>Add LED and Display-based flash support</li>
+					<li>Fix whitelevel and ISO metadata in DNG files</li>
+					<li>Fix memory leak when rotating device</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.3.2" date="2021-11-10">
 			<description>
 				<p>
