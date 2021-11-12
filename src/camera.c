@@ -277,7 +277,8 @@ mp_camera_new(int video_fd, int subdev_fd)
 	camera->has_set_mode = false;
 	camera->num_buffers = 0;
 	camera->use_mplane = use_mplane;
-	memset(camera->child_bg_pids, 0, sizeof(camera->child_bg_pids[0]) * MAX_BG_TASKS);
+	memset(camera->child_bg_pids, 0,
+	       sizeof(camera->child_bg_pids[0]) * MAX_BG_TASKS);
 	return camera;
 }
 
@@ -305,7 +306,8 @@ mp_camera_add_bg_task(MPCamera *camera, pid_t pid)
 				return;
 			} else {
 				// error == -1, still running == 0
-				if (waitpid(camera->child_bg_pids[i], &status, WNOHANG) <= 0)
+				if (waitpid(camera->child_bg_pids[i], &status,
+					    WNOHANG) <= 0)
 					continue; // consider errored wait still running
 
 				if (WIFEXITED(status)) {
@@ -741,7 +743,8 @@ mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
 	return true;
 }
 
-bool mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index)
+bool
+mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index)
 {
 	struct v4l2_buffer buf = {};
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

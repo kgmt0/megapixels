@@ -30,8 +30,10 @@ gles2_debayer_new(MPPixelFormat format)
 	check_gl();
 
 	GLuint shaders[] = {
-		gl_util_load_shader("/org/postmarketos/Megapixels/debayer.vert", GL_VERTEX_SHADER, NULL, 0),
-		gl_util_load_shader("/org/postmarketos/Megapixels/debayer.frag", GL_FRAGMENT_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/debayer.vert",
+				    GL_VERTEX_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/debayer.frag",
+				    GL_FRAGMENT_SHADER, NULL, 0),
 	};
 
 	GLuint program = gl_util_link_program(shaders, 2);
@@ -46,7 +48,8 @@ gles2_debayer_new(MPPixelFormat format)
 	self->uniform_transform = glGetUniformLocation(self->program, "transform");
 	self->uniform_pixel_size = glGetUniformLocation(self->program, "pixel_size");
 	self->uniform_texture = glGetUniformLocation(self->program, "texture");
-	self->uniform_color_matrix = glGetUniformLocation(self->program, "color_matrix");
+	self->uniform_color_matrix =
+		glGetUniformLocation(self->program, "color_matrix");
 	check_gl();
 
 	self->quad = gl_util_new_quad();
@@ -74,12 +77,10 @@ gles2_debayer_use(GLES2Debayer *self)
 }
 
 void
-gles2_debayer_configure(GLES2Debayer *self,
-			const uint32_t dst_width, const uint32_t dst_height,
-			const uint32_t src_width, const uint32_t src_height,
-			const uint32_t rotation,
-			const bool mirrored,
-			const float *colormatrix,
+gles2_debayer_configure(GLES2Debayer *self, const uint32_t dst_width,
+			const uint32_t dst_height, const uint32_t src_width,
+			const uint32_t src_height, const uint32_t rotation,
+			const bool mirrored, const float *colormatrix,
 			const uint8_t blacklevel)
 {
 	glViewport(0, 0, dst_width, dst_height);
@@ -92,9 +93,11 @@ gles2_debayer_configure(GLES2Debayer *self,
 	GLfloat cos_rot = rotation_list[(rotation_index + 1) % 4];
 	GLfloat scale_x = mirrored ? 1 : -1;
 	GLfloat matrix[9] = {
-		cos_rot * scale_x, sin_rot, 0,
+		// clang-format off
+		cos_rot * scale_x,  sin_rot, 0,
 		-sin_rot * scale_x, cos_rot, 0,
-		0, 0, 1,
+		0,                        0, 1,
+		// clang-format on
 	};
 	glUniformMatrix3fv(self->uniform_transform, 1, GL_FALSE, matrix);
 	check_gl();
@@ -110,14 +113,18 @@ gles2_debayer_configure(GLES2Debayer *self,
 			for (int j = 0; j < 3; ++j)
 				transposed[i + j * 3] = colormatrix[j + i * 3];
 
-		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE, transposed);
+		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE,
+				   transposed);
 	} else {
 		static const GLfloat identity[9] = {
+			// clang-format off
 			1, 0, 0,
 			0, 1, 0,
 			0, 0, 1,
+			// clang-format on
 		};
-		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE, identity);
+		glUniformMatrix3fv(self->uniform_color_matrix, 1, GL_FALSE,
+				   identity);
 	}
 	check_gl();
 }
@@ -127,7 +134,8 @@ gles2_debayer_process(GLES2Debayer *self, GLuint dst_id, GLuint source_id)
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, self->frame_buffer);
 	glBindTexture(GL_TEXTURE_2D, dst_id);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst_id, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+			       dst_id, 0);
 	check_gl();
 
 	assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);

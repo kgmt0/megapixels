@@ -13,7 +13,9 @@ varying vec2 top_right_uv;
 varying vec2 bottom_left_uv;
 varying vec2 bottom_right_uv;
 
-void main() {
+void
+main()
+{
 	top_left_uv = tex_coord - pixel_size / 2.0;
 	bottom_right_uv = tex_coord + pixel_size / 2.0;
 	top_right_uv = vec2(top_left_uv.x, bottom_right_uv.y);

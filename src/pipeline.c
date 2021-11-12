@@ -79,7 +79,8 @@ mp_pipeline_sync(MPPipeline *pipeline)
 	g_mutex_init(&mutex);
 	g_mutex_lock(&mutex);
 
-	g_main_context_invoke_full(pipeline->main_context, G_PRIORITY_LOW, (GSourceFunc)unlock_mutex, &mutex, NULL);
+	g_main_context_invoke_full(pipeline->main_context, G_PRIORITY_LOW,
+				   (GSourceFunc)unlock_mutex, &mutex, NULL);
 	g_mutex_lock(&mutex);
 	g_mutex_unlock(&mutex);
 

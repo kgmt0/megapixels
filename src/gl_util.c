@@ -8,32 +8,33 @@
 #include <gmodule.h>
 #include <gdk/gdk.h>
 
-void gl_util_check_error(const char *file, int line)
+void
+gl_util_check_error(const char *file, int line)
 {
 	GLenum error = glGetError();
 
 	const char *name;
 	switch (error) {
-		case GL_NO_ERROR:
-			return; // no error
-		case GL_INVALID_ENUM:
-			name = "GL_INVALID_ENUM";
-			break;
-		case GL_INVALID_VALUE:
-			name = "GL_INVALID_VALUE";
-			break;
-		case GL_INVALID_OPERATION:
-			name = "GL_INVALID_OPERATION";
-			break;
-		case GL_INVALID_FRAMEBUFFER_OPERATION:
-			name = "GL_INVALID_FRAMEBUFFER_OPERATION";
-			break;
-		case GL_OUT_OF_MEMORY:
-			name = "GL_OUT_OF_MEMORY";
-			break;
-		default:
-			name = "UNKNOWN ERROR!";
-			break;
+	case GL_NO_ERROR:
+		return; // no error
+	case GL_INVALID_ENUM:
+		name = "GL_INVALID_ENUM";
+		break;
+	case GL_INVALID_VALUE:
+		name = "GL_INVALID_VALUE";
+		break;
+	case GL_INVALID_OPERATION:
+		name = "GL_INVALID_OPERATION";
+		break;
+	case GL_INVALID_FRAMEBUFFER_OPERATION:
+		name = "GL_INVALID_FRAMEBUFFER_OPERATION";
+		break;
+	case GL_OUT_OF_MEMORY:
+		name = "GL_OUT_OF_MEMORY";
+		break;
+	default:
+		name = "UNKNOWN ERROR!";
+		break;
 	}
 
 	printf("GL error at %s:%d - %s\n", file, line, name);
@@ -42,7 +43,8 @@ void gl_util_check_error(const char *file, int line)
 }
 
 GLuint
-gl_util_load_shader(const char *resource, GLenum type, const char **extra_sources, size_t num_extra)
+gl_util_load_shader(const char *resource, GLenum type, const char **extra_sources,
+		    size_t num_extra)
 {
 	GdkGLContext *context = gdk_gl_context_get_current();
 	assert(context);
@@ -63,7 +65,9 @@ gl_util_load_shader(const char *resource, GLenum type, const char **extra_source
 	int major, minor;
 	gdk_gl_context_get_version(context, &major, &minor);
 	char context_info_buf[128];
-	snprintf(context_info_buf, 128, "#define %s\n#define GL_%d\n#define GL_%d_%d\n", is_es ? "GL_ES" : "GL_NO_ES", major, major, minor);
+	snprintf(context_info_buf, 128,
+		 "#define %s\n#define GL_%d\n#define GL_%d_%d\n",
+		 is_es ? "GL_ES" : "GL_NO_ES", major, major, minor);
 
 	gsize glib_size = 0;
 	const GLchar *source = g_bytes_get_data(bytes, &glib_size);
@@ -151,18 +155,27 @@ gl_util_link_program(GLuint *shaders, size_t num_shaders)
 
 static const GLfloat quad_data[] = {
 	// Vertices
-	-1, -1,
-	1, -1,
-	-1, 1,
-	1, 1,
+	-1,
+	-1,
+	1,
+	-1,
+	-1,
+	1,
+	1,
+	1,
 	// Texcoords
-	0, 0,
-	1, 0,
-	0, 1,
-	1, 1,
+	0,
+	0,
+	1,
+	0,
+	0,
+	1,
+	1,
+	1,
 };
 
-GLuint gl_util_new_quad()
+GLuint
+gl_util_new_quad()
 {
 	GdkGLContext *context = gdk_gl_context_get_current();
 	assert(context);
@@ -174,7 +187,8 @@ GLuint gl_util_new_quad()
 		glGenBuffers(1, &buffer);
 
 		glBindBuffer(GL_ARRAY_BUFFER, buffer);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(quad_data), quad_data, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quad_data), quad_data,
+			     GL_STATIC_DRAW);
 		check_gl();
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -184,18 +198,21 @@ GLuint gl_util_new_quad()
 	}
 }
 
-void gl_util_bind_quad(GLuint buffer)
+void
+gl_util_bind_quad(GLuint buffer)
 {
 	GdkGLContext *context = gdk_gl_context_get_current();
 	assert(context);
 
 	if (gdk_gl_context_get_use_es(context)) {
-		glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, 0, 0, quad_data);
+		glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, 0, 0,
+				      quad_data);
 		check_gl();
 		glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
 		check_gl();
 
-		glVertexAttribPointer(GL_UTIL_TEX_COORD_ATTRIBUTE, 2, GL_FLOAT, 0, 0, quad_data + 8);
+		glVertexAttribPointer(GL_UTIL_TEX_COORD_ATTRIBUTE, 2, GL_FLOAT, 0, 0,
+				      quad_data + 8);
 		check_gl();
 		glEnableVertexAttribArray(GL_UTIL_TEX_COORD_ATTRIBUTE);
 		check_gl();
@@ -203,17 +220,20 @@ void gl_util_bind_quad(GLuint buffer)
 		glBindBuffer(GL_ARRAY_BUFFER, buffer);
 		check_gl();
 
-		glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, GL_FALSE, 0, 0);
+		glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT,
+				      GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
 		check_gl();
 
-		glVertexAttribPointer(GL_UTIL_TEX_COORD_ATTRIBUTE, 2, GL_FLOAT, GL_FALSE, 0, (void*) (8 * sizeof(float)));
+		glVertexAttribPointer(GL_UTIL_TEX_COORD_ATTRIBUTE, 2, GL_FLOAT,
+				      GL_FALSE, 0, (void *)(8 * sizeof(float)));
 		glEnableVertexAttribArray(GL_UTIL_TEX_COORD_ATTRIBUTE);
 		check_gl();
 	}
 }
 
-void gl_util_draw_quad(GLuint buffer)
+void
+gl_util_draw_quad(GLuint buffer)
 {
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	check_gl();

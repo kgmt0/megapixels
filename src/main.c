@@ -24,7 +24,7 @@
 #include <wordexp.h>
 #include <zbar.h>
 
-#define RENDERDOC
+// #define RENDERDOC
 
 #ifdef RENDERDOC
 #include <dlfcn.h>
@@ -158,7 +158,8 @@ mp_main_update_state(const struct mp_main_state *state)
 				   (GSourceFunc)update_state, state_copy, free);
 }
 
-static bool set_zbar_result(MPZBarScanResult *result)
+static bool
+set_zbar_result(MPZBarScanResult *result)
 {
 	if (zbar_result) {
 		for (uint8_t i = 0; i < zbar_result->size; ++i) {
@@ -174,7 +175,8 @@ static bool set_zbar_result(MPZBarScanResult *result)
 	return false;
 }
 
-void mp_main_set_zbar_result(MPZBarScanResult *result)
+void
+mp_main_set_zbar_result(MPZBarScanResult *result)
 {
 	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
 				   (GSourceFunc)set_zbar_result, result, NULL);
@@ -223,7 +225,8 @@ capture_completed(struct capture_completed_args *args)
 void
 mp_main_capture_completed(GdkTexture *thumb, const char *fname)
 {
-	struct capture_completed_args *args = malloc(sizeof(struct capture_completed_args));
+	struct capture_completed_args *args =
+		malloc(sizeof(struct capture_completed_args));
 	args->thumb = thumb;
 	args->fname = g_strdup(fname);
 	g_main_context_invoke_full(g_main_context_default(), G_PRIORITY_DEFAULT_IDLE,
@@ -255,8 +258,10 @@ preview_realize(GtkGLArea *area)
 	}
 
 	GLuint blit_shaders[] = {
-		gl_util_load_shader("/org/postmarketos/Megapixels/blit.vert", GL_VERTEX_SHADER, NULL, 0),
-		gl_util_load_shader("/org/postmarketos/Megapixels/blit.frag", GL_FRAGMENT_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/blit.vert",
+				    GL_VERTEX_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/blit.frag",
+				    GL_FRAGMENT_SHADER, NULL, 0),
 	};
 
 	blit_program = gl_util_link_program(blit_shaders, 2);
@@ -268,8 +273,10 @@ preview_realize(GtkGLArea *area)
 	blit_uniform_texture = glGetUniformLocation(blit_program, "texture");
 
 	GLuint solid_shaders[] = {
-		gl_util_load_shader("/org/postmarketos/Megapixels/solid.vert", GL_VERTEX_SHADER, NULL, 0),
-		gl_util_load_shader("/org/postmarketos/Megapixels/solid.frag", GL_FRAGMENT_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/solid.vert",
+				    GL_VERTEX_SHADER, NULL, 0),
+		gl_util_load_shader("/org/postmarketos/Megapixels/solid.frag",
+				    GL_FRAGMENT_SHADER, NULL, 0),
 	};
 
 	solid_program = gl_util_link_program(solid_shaders, 2);
@@ -294,11 +301,14 @@ position_preview(float *offset_x, float *offset_y, float *size_x, float *size_y)
 	}
 
 	int scale_factor = gtk_widget_get_scale_factor(preview);
-	int top_height = gtk_widget_get_allocated_height(preview_top_box) * scale_factor;
-	int bottom_height = gtk_widget_get_allocated_height(preview_bottom_box) * scale_factor;
+	int top_height =
+		gtk_widget_get_allocated_height(preview_top_box) * scale_factor;
+	int bottom_height =
+		gtk_widget_get_allocated_height(preview_bottom_box) * scale_factor;
 	int inner_height = preview_height - top_height - bottom_height;
 
-	double scale = MIN(preview_width / (float) buffer_width, preview_height / (float) buffer_height);
+	double scale = MIN(preview_width / (float)buffer_width,
+			   preview_height / (float)buffer_height);
 
 	*size_x = scale * buffer_width;
 	*size_y = scale * buffer_height;
@@ -310,7 +320,6 @@ position_preview(float *offset_x, float *offset_y, float *size_x, float *size_y)
 	} else {
 		*offset_y = top_height + (inner_height - *size_y) / 2.0;
 	}
-
 }
 
 static gboolean
@@ -325,7 +334,9 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 	}
 
 #ifdef RENDERDOC
-	if (rdoc_api) rdoc_api->StartFrameCapture(NULL, NULL);
+	if (rdoc_api) {
+		rdoc_api->StartFrameCapture(NULL, NULL);
+	}
 #endif
 
 	glClearColor(0, 0, 0, 1);
@@ -333,10 +344,7 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 
 	float offset_x, offset_y, size_x, size_y;
 	position_preview(&offset_x, &offset_y, &size_x, &size_y);
-	glViewport(offset_x,
-		   preview_height - size_y - offset_y,
-		   size_x,
-		   size_y);
+	glViewport(offset_x, preview_height - size_y - offset_y, size_x, size_y);
 
 	if (current_preview_buffer) {
 		glUseProgram(blit_program);
@@ -347,15 +355,19 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 		GLfloat sin_rot = rotation_list[rotation_index];
 		GLfloat cos_rot = rotation_list[(4 + rotation_index - 1) % 4];
 		GLfloat matrix[9] = {
-			cos_rot, sin_rot, 0,
+			// clang-format off
+			cos_rot,  sin_rot, 0,
 			-sin_rot, cos_rot, 0,
-			0, 0, 1,
+			0,              0, 1,
+			// clang-format on
 		};
 		glUniformMatrix3fv(blit_uniform_transform, 1, GL_FALSE, matrix);
 		check_gl();
 
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, mp_process_pipeline_buffer_get_texture_id(current_preview_buffer));
+		glBindTexture(GL_TEXTURE_2D,
+			      mp_process_pipeline_buffer_get_texture_id(
+				      current_preview_buffer));
 		glUniform1i(blit_uniform_texture, 0);
 		check_gl();
 
@@ -388,20 +400,27 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 			};
 
 			for (int i = 0; i < 4; ++i) {
-				vertices[i * 2] = 2 * vertices[i * 2] / preview_buffer_width - 1.0;
-				vertices[i * 2 + 1] = 1.0 - 2 * vertices[i * 2 + 1] / preview_buffer_height;
+				vertices[i * 2] =
+					2 * vertices[i * 2] / preview_buffer_width -
+					1.0;
+				vertices[i * 2 + 1] =
+					1.0 - 2 * vertices[i * 2 + 1] /
+						      preview_buffer_height;
 			}
 
 			if (gtk_gl_area_get_use_es(area)) {
-				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, 0, 0, vertices);
+				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2,
+						      GL_FLOAT, 0, 0, vertices);
 				check_gl();
 				glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
 				check_gl();
 			} else {
-				glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
+				glBufferData(GL_ARRAY_BUFFER, sizeof(vertices),
+					     vertices, GL_STREAM_DRAW);
 				check_gl();
 
-				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				glVertexAttribPointer(GL_UTIL_VERTEX_ATTRIBUTE, 2,
+						      GL_FLOAT, GL_FALSE, 0, 0);
 				glEnableVertexAttribArray(GL_UTIL_VERTEX_ATTRIBUTE);
 				check_gl();
 			}
@@ -417,7 +436,9 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
 	glFlush();
 
 #ifdef RENDERDOC
-	if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
+	if (rdoc_api) {
+		rdoc_api->EndFrameCapture(NULL, NULL);
+	}
 #endif
 
 	return FALSE;
@@ -446,7 +467,8 @@ run_open_last_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 	}
 	sprintf(uri, "file://%s", last_path);
 	if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
-		g_printerr("Could not launch image viewer for '%s': %s\n", uri, error->message);
+		g_printerr("Could not launch image viewer for '%s': %s\n", uri,
+			   error->message);
 	}
 }
 
@@ -472,14 +494,13 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 void
 run_about_action(GSimpleAction *action, GVariant *param, GApplication *app)
 {
-	gtk_show_about_dialog(NULL, "program-name", "Megapixels",
-			"title", "Megapixels",
-			"logo-icon-name", "org.postmarketos.Megapixels",
-			"comments", "The postmarketOS camera application",
-			"website", "https://sr.ht/~martijnbraam/megapixels",
-			"version", VERSION,
-			"license-type", GTK_LICENSE_GPL_3_0_ONLY,
-			NULL);
+	gtk_show_about_dialog(NULL, "program-name", "Megapixels", "title",
+			      "Megapixels", "logo-icon-name",
+			      "org.postmarketos.Megapixels", "comments",
+			      "The postmarketOS camera application", "website",
+			      "https://sr.ht/~martijnbraam/megapixels", "version",
+			      VERSION, "license-type", GTK_LICENSE_GPL_3_0_ONLY,
+			      NULL);
 }
 
 void
@@ -512,23 +533,19 @@ on_zbar_dialog_response(GtkDialog *dialog, int response, char *data)
 {
 	GError *error = NULL;
 	switch (response) {
-		case GTK_RESPONSE_YES:
-			if (!g_app_info_launch_default_for_uri(data,
-							       NULL, &error)) {
-				g_printerr("Could not launch application: %s\n",
-					   error->message);
-			}
-		case GTK_RESPONSE_ACCEPT:
-		{
-			GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
-			gdk_clipboard_set_text(
-				gdk_display_get_clipboard(display),
-				data);
+	case GTK_RESPONSE_YES:
+		if (!g_app_info_launch_default_for_uri(data, NULL, &error)) {
+			g_printerr("Could not launch application: %s\n",
+				   error->message);
 		}
-		case GTK_RESPONSE_CANCEL:
-			break;
-		default:
-			g_printerr("Wrong dialog response: %d\n", response);
+	case GTK_RESPONSE_ACCEPT: {
+		GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
+		gdk_clipboard_set_text(gdk_display_get_clipboard(display), data);
+	}
+	case GTK_RESPONSE_CANCEL:
+		break;
+	default:
+		g_printerr("Wrong dialog response: %d\n", response);
 	}
 
 	g_free(data);
@@ -540,48 +557,31 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 {
 	GtkWidget *dialog;
 	GtkDialogFlags flags = GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT;
-	bool data_is_url = g_uri_is_valid(
-		code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
+	bool data_is_url =
+		g_uri_is_valid(code->data, G_URI_FLAGS_PARSE_RELAXED, NULL);
 
-	char* data = strdup(code->data);
+	char *data = strdup(code->data);
 
 	if (data_is_url) {
 		dialog = gtk_message_dialog_new(
-			GTK_WINDOW(gtk_widget_get_root(widget)),
-			flags,
-			GTK_MESSAGE_QUESTION,
-			GTK_BUTTONS_NONE,
-			"Found a URL '%s' encoded in a %s.",
-			code->data,
-			code->type);
-		gtk_dialog_add_buttons(
-			GTK_DIALOG(dialog),
-			"_Open URL",
-			GTK_RESPONSE_YES,
-			NULL);
+			GTK_WINDOW(gtk_widget_get_root(widget)), flags,
+			GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+			"Found a URL '%s' encoded in a %s.", code->data, code->type);
+		gtk_dialog_add_buttons(GTK_DIALOG(dialog), "_Open URL",
+				       GTK_RESPONSE_YES, NULL);
 	} else {
 		dialog = gtk_message_dialog_new(
-			GTK_WINDOW(gtk_widget_get_root(widget)),
-			flags,
-			GTK_MESSAGE_QUESTION,
-			GTK_BUTTONS_NONE,
-			"Found data encoded in a %s.",
-			code->type);
-		gtk_message_dialog_format_secondary_markup (
-			GTK_MESSAGE_DIALOG(dialog),
-			"<small>%s</small>",
-			code->data
-			);
+			GTK_WINDOW(gtk_widget_get_root(widget)), flags,
+			GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+			"Found data encoded in a %s.", code->type);
+		gtk_message_dialog_format_secondary_markup(
+			GTK_MESSAGE_DIALOG(dialog), "<small>%s</small>", code->data);
 	}
-	gtk_dialog_add_buttons(
-		GTK_DIALOG(dialog),
-		"_Copy",
-		GTK_RESPONSE_ACCEPT,
-		"_Cancel",
-		GTK_RESPONSE_CANCEL,
-		NULL);
+	gtk_dialog_add_buttons(GTK_DIALOG(dialog), "_Copy", GTK_RESPONSE_ACCEPT,
+			       "_Cancel", GTK_RESPONSE_CANCEL, NULL);
 
-	g_signal_connect(dialog, "response", G_CALLBACK(on_zbar_dialog_response), data);
+	g_signal_connect(dialog, "response", G_CALLBACK(on_zbar_dialog_response),
+			 data);
 
 	gtk_widget_show(GTK_WIDGET(dialog));
 }
@@ -589,7 +589,8 @@ on_zbar_code_tapped(GtkWidget *widget, const MPZBarCode *code)
 static void
 preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 {
-	GtkWidget *widget = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+	GtkWidget *widget =
+		gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
 	int scale_factor = gtk_widget_get_scale_factor(widget);
 
 	// Tapped zbar result
@@ -598,13 +599,16 @@ preview_pressed(GtkGestureClick *gesture, int n_press, double x, double y)
 		float offset_x, offset_y, size_x, size_y;
 		position_preview(&offset_x, &offset_y, &size_x, &size_y);
 
-		int zbar_x = (x - offset_x) * scale_factor / size_x * preview_buffer_width;
-		int zbar_y = (y - offset_y) * scale_factor / size_y * preview_buffer_height;
+		int zbar_x = (x - offset_x) * scale_factor / size_x *
+			     preview_buffer_width;
+		int zbar_y = (y - offset_y) * scale_factor / size_y *
+			     preview_buffer_height;
 
 		for (uint8_t i = 0; i < zbar_result->size; ++i) {
 			MPZBarCode *code = &zbar_result->codes[i];
 
-			if (check_point_inside_bounds(zbar_x, zbar_y, code->bounds_x, code->bounds_y)) {
+			if (check_point_inside_bounds(zbar_x, zbar_y, code->bounds_x,
+						      code->bounds_y)) {
 				on_zbar_code_tapped(widget, code);
 				return;
 			}
@@ -647,8 +651,7 @@ run_close_settings_action(GSimpleAction *action, GVariant *param, gpointer user_
 	// Update settings
 	bool save_dng = g_settings_get_boolean(settings, "save-raw");
 
-	if (save_dng != setting_save_dng)
-	{
+	if (save_dng != setting_save_dng) {
 		setting_save_dng = save_dng;
 		update_io_pipeline();
 	}
@@ -677,23 +680,25 @@ on_auto_controls_toggled(GtkToggleButton *button, void (*set_auto_fn)(bool))
 static void
 update_scale(GtkToggleButton *button, GtkScale *scale)
 {
-	gtk_widget_set_sensitive(GTK_WIDGET(scale), !gtk_toggle_button_get_active(button));
+	gtk_widget_set_sensitive(GTK_WIDGET(scale),
+				 !gtk_toggle_button_get_active(button));
 }
 
 static void
-open_controls(GtkWidget *parent, const char *title_name,
-	      double min_value, double max_value, double current,
-	      bool auto_enabled,
-	      void (*set_fn)(double),
-	      void (*set_auto_fn)(bool))
+open_controls(GtkWidget *parent, const char *title_name, double min_value,
+	      double max_value, double current, bool auto_enabled,
+	      void (*set_fn)(double), void (*set_auto_fn)(bool))
 {
 	GtkBuilder *builder = gtk_builder_new_from_resource(
 		"/org/postmarketos/Megapixels/controls-popover.ui");
-	GtkPopover *popover = GTK_POPOVER(gtk_builder_get_object(builder, "controls"));
+	GtkPopover *popover =
+		GTK_POPOVER(gtk_builder_get_object(builder, "controls"));
 	GtkScale *scale = GTK_SCALE(gtk_builder_get_object(builder, "scale"));
 	GtkLabel *title = GTK_LABEL(gtk_builder_get_object(builder, "title"));
-	GtkLabel *value_label = GTK_LABEL(gtk_builder_get_object(builder, "value-label"));
-	GtkToggleButton *auto_button = GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "auto-button"));
+	GtkLabel *value_label =
+		GTK_LABEL(gtk_builder_get_object(builder, "value-label"));
+	GtkToggleButton *auto_button =
+		GTK_TOGGLE_BUTTON(gtk_builder_get_object(builder, "auto-button"));
 
 	gtk_label_set_label(title, title_name);
 
@@ -706,9 +711,12 @@ open_controls(GtkWidget *parent, const char *title_name,
 	gtk_toggle_button_set_active(auto_button, auto_enabled);
 	update_scale(auto_button, scale);
 
-	g_signal_connect(adjustment, "value-changed", G_CALLBACK(on_controls_scale_changed), set_fn);
-	g_signal_connect(adjustment, "value-changed", G_CALLBACK(update_value), value_label);
-	g_signal_connect(auto_button, "toggled", G_CALLBACK(on_auto_controls_toggled), set_auto_fn);
+	g_signal_connect(adjustment, "value-changed",
+			 G_CALLBACK(on_controls_scale_changed), set_fn);
+	g_signal_connect(adjustment, "value-changed", G_CALLBACK(update_value),
+			 value_label);
+	g_signal_connect(auto_button, "toggled",
+			 G_CALLBACK(on_auto_controls_toggled), set_auto_fn);
 	g_signal_connect(auto_button, "toggled", G_CALLBACK(update_scale), scale);
 
 	gtk_widget_set_parent(GTK_WIDGET(popover), parent);
@@ -737,14 +745,14 @@ set_gain_auto(bool is_auto)
 static void
 open_iso_controls(GtkWidget *button, gpointer user_data)
 {
-	open_controls(button, "ISO", 0, gain_max, gain, !gain_is_manual, set_gain, set_gain_auto);
+	open_controls(button, "ISO", 0, gain_max, gain, !gain_is_manual, set_gain,
+		      set_gain_auto);
 }
 
 static void
 set_shutter(double value)
 {
-	int new_exposure =
-		(int)(value / 360.0 * camera->capture_mode.height);
+	int new_exposure = (int)(value / 360.0 * camera->capture_mode.height);
 	if (new_exposure != exposure) {
 		exposure = new_exposure;
 		update_io_pipeline();
@@ -763,7 +771,8 @@ set_shutter_auto(bool is_auto)
 static void
 open_shutter_controls(GtkWidget *button, gpointer user_data)
 {
-	open_controls(button, "Shutter", 1.0, 360.0, exposure, !exposure_is_manual, set_shutter, set_shutter_auto);
+	open_controls(button, "Shutter", 1.0, 360.0, exposure, !exposure_is_manual,
+		      set_shutter, set_shutter_auto);
 }
 
 static void
@@ -772,7 +781,8 @@ flash_button_clicked(GtkWidget *button, gpointer user_data)
 	flash_enabled = !flash_enabled;
 	update_io_pipeline();
 
-	const char * icon_name = flash_enabled ? "flash-enabled-symbolic" : "flash-disabled-symbolic";
+	const char *icon_name =
+		flash_enabled ? "flash-enabled-symbolic" : "flash-disabled-symbolic";
 	gtk_button_set_icon_name(GTK_BUTTON(button), icon_name);
 }
 
@@ -795,15 +805,18 @@ create_simple_action(GtkApplication *app, const char *name, GCallback callback)
 	return action;
 }
 
-static void update_ui_rotation()
+static void
+update_ui_rotation()
 {
 	if (device_rotation == 0 || device_rotation == 180) {
 		// Portrait
 		gtk_widget_set_halign(preview_top_box, GTK_ALIGN_FILL);
-		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box), GTK_ORIENTATION_VERTICAL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box),
+					       GTK_ORIENTATION_VERTICAL);
 
 		gtk_widget_set_halign(preview_bottom_box, GTK_ALIGN_FILL);
-		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box), GTK_ORIENTATION_HORIZONTAL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box),
+					       GTK_ORIENTATION_HORIZONTAL);
 
 		if (device_rotation == 0) {
 			gtk_widget_set_valign(preview_top_box, GTK_ALIGN_START);
@@ -815,10 +828,12 @@ static void update_ui_rotation()
 	} else {
 		// Landscape
 		gtk_widget_set_valign(preview_top_box, GTK_ALIGN_FILL);
-		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box), GTK_ORIENTATION_HORIZONTAL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_top_box),
+					       GTK_ORIENTATION_HORIZONTAL);
 
 		gtk_widget_set_valign(preview_bottom_box, GTK_ALIGN_FILL);
-		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box), GTK_ORIENTATION_VERTICAL);
+		gtk_orientable_set_orientation(GTK_ORIENTABLE(preview_bottom_box),
+					       GTK_ORIENTATION_VERTICAL);
 
 		if (device_rotation == 90) {
 			gtk_widget_set_halign(preview_top_box, GTK_ALIGN_END);
@@ -830,7 +845,8 @@ static void update_ui_rotation()
 	}
 }
 
-static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
+static void
+display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
 {
 	GError *error = NULL;
 	GVariant *result = g_dbus_connection_call_finish(conn, res, &error);
@@ -862,30 +878,20 @@ static void display_config_received(GDBusConnection *conn, GAsyncResult *res, gp
 	g_variant_unref(result);
 }
 
-static void update_screen_rotation(GDBusConnection *conn)
+static void
+update_screen_rotation(GDBusConnection *conn)
 {
-	g_dbus_connection_call(conn,
-		"org.gnome.Mutter.DisplayConfig",
-		"/org/gnome/Mutter/DisplayConfig",
-		"org.gnome.Mutter.DisplayConfig",
-		"GetResources",
-		NULL,
-		NULL,
-		G_DBUS_CALL_FLAGS_NO_AUTO_START,
-		-1,
-		NULL,
-		(GAsyncReadyCallback)display_config_received,
-		NULL);
+	g_dbus_connection_call(conn, "org.gnome.Mutter.DisplayConfig",
+			       "/org/gnome/Mutter/DisplayConfig",
+			       "org.gnome.Mutter.DisplayConfig", "GetResources",
+			       NULL, NULL, G_DBUS_CALL_FLAGS_NO_AUTO_START, -1, NULL,
+			       (GAsyncReadyCallback)display_config_received, NULL);
 }
 
-static void on_screen_rotate(
-	GDBusConnection *conn,
-        const gchar *sender_name,
-        const gchar *object_path,
-        const gchar *interface_name,
-        const gchar *signal_name,
-        GVariant *parameters,
-        gpointer user_data)
+static void
+on_screen_rotate(GDBusConnection *conn, const gchar *sender_name,
+		 const gchar *object_path, const gchar *interface_name,
+		 const gchar *signal_name, GVariant *parameters, gpointer user_data)
 {
 	update_screen_rotation(conn);
 }
@@ -911,18 +917,25 @@ activate(GtkApplication *app, gpointer data)
 		"/org/postmarketos/Megapixels/camera.ui");
 
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-	GtkWidget *iso_button = GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
-	GtkWidget *shutter_button = GTK_WIDGET(gtk_builder_get_object(builder, "shutter-controls-button"));
-	flash_button = GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
-	GtkWidget *setting_dng_button = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
+	GtkWidget *iso_button =
+		GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
+	GtkWidget *shutter_button = GTK_WIDGET(
+		gtk_builder_get_object(builder, "shutter-controls-button"));
+	flash_button =
+		GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
+	GtkWidget *setting_dng_button =
+		GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
-	open_last_stack = GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
+	open_last_stack =
+		GTK_WIDGET(gtk_builder_get_object(builder, "open_last_stack"));
 	thumb_last = GTK_WIDGET(gtk_builder_get_object(builder, "thumb_last"));
-	process_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
+	process_spinner =
+		GTK_WIDGET(gtk_builder_get_object(builder, "process_spinner"));
 	scanned_codes = GTK_WIDGET(gtk_builder_get_object(builder, "scanned-codes"));
 	preview_top_box = GTK_WIDGET(gtk_builder_get_object(builder, "top-box"));
-	preview_bottom_box = GTK_WIDGET(gtk_builder_get_object(builder, "bottom-box"));
+	preview_bottom_box =
+		GTK_WIDGET(gtk_builder_get_object(builder, "bottom-box"));
 
 	g_signal_connect(window, "realize", G_CALLBACK(on_realize), NULL);
 
@@ -934,14 +947,19 @@ activate(GtkApplication *app, gpointer data)
 	gtk_widget_add_controller(preview, GTK_EVENT_CONTROLLER(click));
 
 	g_signal_connect(iso_button, "clicked", G_CALLBACK(open_iso_controls), NULL);
-	g_signal_connect(shutter_button, "clicked", G_CALLBACK(open_shutter_controls), NULL);
-	g_signal_connect(flash_button, "clicked", G_CALLBACK(flash_button_clicked), NULL);
+	g_signal_connect(shutter_button, "clicked",
+			 G_CALLBACK(open_shutter_controls), NULL);
+	g_signal_connect(flash_button, "clicked", G_CALLBACK(flash_button_clicked),
+			 NULL);
 
 	// Setup actions
 	create_simple_action(app, "capture", G_CALLBACK(run_capture_action));
-	create_simple_action(app, "switch-camera", G_CALLBACK(run_camera_switch_action));
-	create_simple_action(app, "open-settings", G_CALLBACK(run_open_settings_action));
-	create_simple_action(app, "close-settings", G_CALLBACK(run_close_settings_action));
+	create_simple_action(app, "switch-camera",
+			     G_CALLBACK(run_camera_switch_action));
+	create_simple_action(app, "open-settings",
+			     G_CALLBACK(run_open_settings_action));
+	create_simple_action(app, "close-settings",
+			     G_CALLBACK(run_close_settings_action));
 	create_simple_action(app, "open-last", G_CALLBACK(run_open_last_action));
 	create_simple_action(app, "open-photos", G_CALLBACK(run_open_photos_action));
 	create_simple_action(app, "about", G_CALLBACK(run_about_action));
@@ -956,23 +974,18 @@ activate(GtkApplication *app, gpointer data)
 
 	// Setup settings
 	settings = g_settings_new("org.postmarketos.Megapixels");
-	g_settings_bind (settings, "save-raw", setting_dng_button, "active", G_SETTINGS_BIND_DEFAULT);
+	g_settings_bind(settings, "save-raw", setting_dng_button, "active",
+			G_SETTINGS_BIND_DEFAULT);
 
 	setting_save_dng = g_settings_get_boolean(settings, "save-raw");
 
 	// Listen for phosh rotation
-	GDBusConnection *conn = g_application_get_dbus_connection(G_APPLICATION(app));
+	GDBusConnection *conn =
+		g_application_get_dbus_connection(G_APPLICATION(app));
 	g_dbus_connection_signal_subscribe(
-		conn,
-		NULL,
-		"org.gnome.Mutter.DisplayConfig",
-		"MonitorsChanged",
-		"/org/gnome/Mutter/DisplayConfig",
-		NULL,
-		G_DBUS_SIGNAL_FLAGS_NONE,
-		&on_screen_rotate,
-		NULL,
-		NULL);
+		conn, NULL, "org.gnome.Mutter.DisplayConfig", "MonitorsChanged",
+		"/org/gnome/Mutter/DisplayConfig", NULL, G_DBUS_SIGNAL_FLAGS_NONE,
+		&on_screen_rotate, NULL, NULL);
 	update_screen_rotation(conn);
 
 	// Initialize display flash
@@ -1000,14 +1013,13 @@ main(int argc, char *argv[])
 #ifdef RENDERDOC
 	{
 		void *mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD);
-		if (mod)
-		{
-		    pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
-		    int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
-		    assert(ret == 1);
-		}
-		else
-		{
+		if (mod) {
+			pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+				(pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+			int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2,
+						   (void **)&rdoc_api);
+			assert(ret == 1);
+		} else {
 			printf("Renderdoc not found\n");
 		}
 	}

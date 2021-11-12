@@ -9,7 +9,9 @@ uniform mat3 transform;
 
 varying vec2 uv;
 
-void main() {
+void
+main()
+{
 	uv = tex_coord;
 
 	gl_Position = vec4(transform * vec3(vert, 1), 1);

@@ -37,8 +37,8 @@ find_config(char *conffile)
 		}
 
 		// Check for a config file in XDG_CONFIG_HOME
-		sprintf(conffile, "%s/megapixels/config/%s.ini", g_get_user_config_dir (),
-			buf);
+		sprintf(conffile, "%s/megapixels/config/%s.ini",
+			g_get_user_config_dir(), buf);
 		if (access(conffile, F_OK) != -1) {
 			printf("Found config file at %s\n", conffile);
 			return true;

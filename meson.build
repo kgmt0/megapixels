@@ -77,3 +77,46 @@ executable('megapixels-camera-test',
   include_directories: 'src/',
   dependencies: [gtkdep],
   install: true)
+
+# Formatting
+clang_format = find_program('clang-format-12', required: false)
+if clang_format.found()
+  format_files = [
+    'data/blit.frag',
+    'data/blit.vert',
+    'data/debayer.frag',
+    'data/debayer.vert',
+    'data/solid.frag',
+    'data/solid.vert',
+    'src/camera.c',
+    'src/camera.h',
+    'src/camera_config.c',
+    'src/camera_config.h',
+    'src/device.c',
+    'src/device.h',
+    'src/flash.c',
+    'src/flash.h',
+    'src/gl_util.c',
+    'src/gl_util.h',
+    'src/gles2_debayer.c',
+    'src/gles2_debayer.h',
+    'src/io_pipeline.c',
+    'src/io_pipeline.h',
+    'src/main.c',
+    'src/main.h',
+    'src/matrix.c',
+    'src/matrix.h',
+    'src/pipeline.c',
+    'src/pipeline.h',
+    'src/process_pipeline.c',
+    'src/process_pipeline.h',
+    'src/zbar_pipeline.c',
+    'src/zbar_pipeline.h',
+    'tools/camera_test.c',
+    'tools/list_devices.c',
+  ]
+  run_target('clang-format',
+             command: ['clang-format.sh', '-i'] + format_files)
+  run_target('clang-format-check',
+             command: ['clang-format.sh', '-n', '-Werror'] + format_files)
+endif

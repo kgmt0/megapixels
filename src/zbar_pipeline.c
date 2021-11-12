@@ -24,7 +24,8 @@ static volatile int frames_received = 0;
 
 static zbar_image_scanner_t *scanner;
 
-static void setup(MPPipeline *pipeline, const void *data)
+static void
+setup(MPPipeline *pipeline, const void *data)
 {
 	scanner = zbar_image_scanner_create();
 	zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
@@ -48,29 +49,29 @@ static bool
 is_3d_code(zbar_symbol_type_t type)
 {
 	switch (type) {
-		case ZBAR_EAN2:
-		case ZBAR_EAN5:
-		case ZBAR_EAN8:
-		case ZBAR_UPCE:
-		case ZBAR_ISBN10:
-		case ZBAR_UPCA:
-		case ZBAR_EAN13:
-		case ZBAR_ISBN13:
-		case ZBAR_I25:
-		case ZBAR_DATABAR:
-		case ZBAR_DATABAR_EXP:
-		case ZBAR_CODABAR:
-		case ZBAR_CODE39:
-		case ZBAR_CODE93:
-		case ZBAR_CODE128:
-			return false;
-		case ZBAR_COMPOSITE:
-		case ZBAR_PDF417:
-		case ZBAR_QRCODE:
-		case ZBAR_SQCODE:
-			return true;
-		default:
-			return false;
+	case ZBAR_EAN2:
+	case ZBAR_EAN5:
+	case ZBAR_EAN8:
+	case ZBAR_UPCE:
+	case ZBAR_ISBN10:
+	case ZBAR_UPCA:
+	case ZBAR_EAN13:
+	case ZBAR_ISBN13:
+	case ZBAR_I25:
+	case ZBAR_DATABAR:
+	case ZBAR_DATABAR_EXP:
+	case ZBAR_CODABAR:
+	case ZBAR_CODE39:
+	case ZBAR_CODE93:
+	case ZBAR_CODE128:
+		return false;
+	case ZBAR_COMPOSITE:
+	case ZBAR_PDF417:
+	case ZBAR_QRCODE:
+	case ZBAR_SQCODE:
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -101,7 +102,8 @@ map_coords(int *x, int *y, int width, int height, int rotation, bool mirrored)
 }
 
 static MPZBarCode
-process_symbol(const MPZBarImage *image, int width, int height, const zbar_symbol_t *symbol)
+process_symbol(const MPZBarImage *image, int width, int height,
+	       const zbar_symbol_t *symbol)
 {
 	if (image->rotation == 90 || image->rotation == 270) {
 		int tmp = width;
@@ -145,13 +147,14 @@ process_symbol(const MPZBarImage *image, int width, int height, const zbar_symbo
 	}
 
 	for (uint8_t i = 0; i < 4; ++i) {
-		map_coords(&code.bounds_x[i], &code.bounds_y[i], width, height, image->rotation, image->mirrored);
+		map_coords(&code.bounds_x[i], &code.bounds_y[i], width, height,
+			   image->rotation, image->mirrored);
 	}
 
 	const char *data = zbar_symbol_get_data(symbol);
 	unsigned int data_size = zbar_symbol_get_data_length(symbol);
 	code.type = zbar_get_symbol_name(type);
-	code.data = strndup(data, data_size+1);
+	code.data = strndup(data, data_size + 1);
 	code.data[data_size] = 0;
 
 	return code;
@@ -162,10 +165,10 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
 {
 	MPZBarImage *image = *_image;
 
-	assert(image->pixel_format == MP_PIXEL_FMT_BGGR8
-	       || image->pixel_format == MP_PIXEL_FMT_GBRG8
-	       || image->pixel_format == MP_PIXEL_FMT_GRBG8
-	       || image->pixel_format == MP_PIXEL_FMT_RGGB8);
+	assert(image->pixel_format == MP_PIXEL_FMT_BGGR8 ||
+	       image->pixel_format == MP_PIXEL_FMT_GBRG8 ||
+	       image->pixel_format == MP_PIXEL_FMT_GRBG8 ||
+	       image->pixel_format == MP_PIXEL_FMT_RGGB8);
 
 	// Create a grayscale image for scanning from the current preview.
 	// Rotate/mirror correctly.
@@ -184,7 +187,8 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
 	zbar_image_t *zbar_image = zbar_image_create();
 	zbar_image_set_format(zbar_image, zbar_fourcc('Y', '8', '0', '0'));
 	zbar_image_set_size(zbar_image, width, height);
-	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t), zbar_image_free_data);
+	zbar_image_set_data(zbar_image, data, width * height * sizeof(uint8_t),
+			    zbar_image_free_data);
 
 	int res = zbar_scan_image(scanner, zbar_image);
 	assert(res >= 0);
@@ -196,7 +200,8 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
 		const zbar_symbol_t *symbol = zbar_image_first_symbol(zbar_image);
 		for (int i = 0; i < MIN(res, 8); ++i) {
 			assert(symbol != NULL);
-			result->codes[i] = process_symbol(image, width, height, symbol);
+			result->codes[i] =
+				process_symbol(image, width, height, symbol);
 			symbol = zbar_symbol_next(symbol);
 		}
 
@@ -227,12 +232,8 @@ mp_zbar_pipeline_process_image(MPZBarImage *image)
 }
 
 MPZBarImage *
-mp_zbar_image_new(uint8_t *data,
-		  MPPixelFormat pixel_format,
-		  int width,
-		  int height,
-		  int rotation,
-		  bool mirrored)
+mp_zbar_image_new(uint8_t *data, MPPixelFormat pixel_format, int width, int height,
+		  int rotation, bool mirrored)
 {
 	MPZBarImage *image = malloc(sizeof(MPZBarImage));
 	image->data = data;

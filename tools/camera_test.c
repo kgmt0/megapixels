@@ -175,9 +175,9 @@ main(int argc, char *argv[])
 				printf("      Failed to capture buffer\n");
 			}
 
-			size_t num_bytes =
-				mp_pixel_format_width_to_bytes(m->pixel_format, m->width) *
-				m->height;
+			size_t num_bytes = mp_pixel_format_width_to_bytes(
+						   m->pixel_format, m->width) *
+					   m->height;
 			uint8_t *data = malloc(num_bytes);
 			memcpy(data, buffer.data, num_bytes);
 
