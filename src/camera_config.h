@@ -44,6 +44,7 @@ struct mp_camera_config {
 
 	char flash_path[260];
 	bool flash_display;
+	bool has_flash;
 };
 
 bool mp_load_config();

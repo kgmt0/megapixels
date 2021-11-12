@@ -208,8 +208,13 @@ config_ini_handler(void *user, const char *section, const char *name,
 			cc->iso_max = strtod(value, NULL);
 		} else if (strcmp(name, "flash-path") == 0) {
 			strcpy(cc->flash_path, value);
+			cc->has_flash = true;
 		} else if (strcmp(name, "flash-display") == 0) {
 			cc->flash_display = strcmp(value, "true") == 0;
+
+			if (cc->flash_display) {
+				cc->has_flash = true;
+			}
 		} else {
 			g_printerr("Unknown key '%s' in [%s]\n", name, section);
 			exit(1);

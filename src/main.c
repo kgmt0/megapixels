@@ -76,6 +76,7 @@ GtkWidget *process_spinner;
 GtkWidget *scanned_codes;
 GtkWidget *preview_top_box;
 GtkWidget *preview_bottom_box;
+GtkWidget *flash_button;
 
 GSettings *settings;
 
@@ -113,6 +114,9 @@ update_io_pipeline()
 		.flash_enabled = flash_enabled,
 	};
 	mp_io_pipeline_update_state(&io_state);
+
+	// Make the right settings available for the camera
+	gtk_widget_set_visible(flash_button, camera->has_flash);
 }
 
 static bool
@@ -909,7 +913,7 @@ activate(GtkApplication *app, gpointer data)
 	GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
 	GtkWidget *iso_button = GTK_WIDGET(gtk_builder_get_object(builder, "iso-controls-button"));
 	GtkWidget *shutter_button = GTK_WIDGET(gtk_builder_get_object(builder, "shutter-controls-button"));
-	GtkWidget *flash_button = GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
+	flash_button = GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
 	GtkWidget *setting_dng_button = GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
 	preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
 	main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
