@@ -427,9 +427,11 @@ process_image_for_capture(const uint8_t *image, int count)
 	TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\002\001\001\000"); // BGGR
 #endif
 	printf("TIFF version %d\n", TIFFLIB_VERSION);
-	if (camera->whitelevel) {
-		TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &camera->whitelevel);
+	int whitelevel = camera->whitelevel;
+	if (!whitelevel) {
+		whitelevel = (1 << mp_pixel_format_pixel_depth(mode.pixel_format)) - 1;
 	}
+	TIFFSetField(tif, TIFFTAG_WHITELEVEL, 1, &whitelevel);
 	if (camera->blacklevel) {
 		const float blacklevel = camera->blacklevel;
 		TIFFSetField(tif, TIFFTAG_BLACKLEVEL, 1, &blacklevel);
@@ -455,10 +457,11 @@ process_image_for_capture(const uint8_t *image, int count)
 		     (mode.frame_interval.numerator /
 		      (float)mode.frame_interval.denominator) /
 			     ((float)mode.height / (float)exposure));
-	uint16_t isospeed[1];
-	isospeed[0] = (uint16_t)remap(gain - 1, 0, gain_max, camera->iso_min,
-				      camera->iso_max);
-	TIFFSetField(tif, EXIFTAG_ISOSPEEDRATINGS, 1, isospeed);
+	if (camera->iso_min && camera->iso_max) {
+		uint16_t isospeed = remap(gain - 1, 0, gain_max, camera->iso_min,
+					  camera->iso_max);
+		TIFFSetField(tif, EXIFTAG_ISOSPEEDRATINGS, 1, &isospeed);
+	}
 	TIFFSetField(tif, EXIFTAG_FLASH, 0);
 
 	TIFFSetField(tif, EXIFTAG_DATETIMEORIGINAL, datetime);
