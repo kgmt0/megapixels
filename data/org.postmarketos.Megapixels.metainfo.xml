@@ -26,6 +26,13 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.4.1" date="2021-11-14">
+			<description>
+				<p>
+					<li>data: Add StartupNotify to desktop file</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.4.0" date="2021-11-13">
 			<description>
 				<p>
