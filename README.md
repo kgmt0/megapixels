@@ -85,20 +85,7 @@ see postprocess.sh in this repository.
 
 # Developing
 
-See the mailing list and issue tracker on https://sr.ht/~martijnbraam/Megapixels/
-
-To send patches, follow this procedure:
-
-1. Change the default subject prefix from "PATCH" to "PATCH Megapixels" by
-   running this command (only needed once).
-   ```shell-session
-   $ git config --local format.subjectPrefix "PATCH Megapixels"
-   ```
-2. Rebase your commits on top of the latest `master`.
-3. Send them to the mailing list:
-   ```shell-session
-   $ git send-email --to="~martijnbraam/public-inbox@lists.sr.ht" origin/master
-   ```
+Megapixels is developed at: https://gitlab.com/postmarketOS/megapixels
 
 ## Source code organization
 
