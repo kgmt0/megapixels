@@ -597,7 +597,7 @@ process_capture_burst(GdkTexture *thumb)
                 burst_dir,
                 capture_fname,
                 save_dng_s);
-        GError *error = NULL;
+        g_autoptr(GError) error = NULL;
         GSubprocess *proc = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE,
                                              &error,
                                              processing_script,
@@ -609,7 +609,6 @@ process_capture_burst(GdkTexture *thumb)
         if (!proc) {
                 g_printerr("Failed to spawn postprocess process: %s\n",
                            error->message);
-                g_error_free(error);
                 return;
         }
 

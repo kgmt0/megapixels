@@ -490,7 +490,7 @@ void
 run_open_last_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
         char uri[275];
-        GError *error = NULL;
+        g_autoptr(GError) error = NULL;
 
         if (strlen(last_path) == 0) {
                 return;
@@ -500,7 +500,6 @@ run_open_last_action(GSimpleAction *action, GVariant *param, gpointer user_data)
                 g_printerr("Could not launch image viewer for '%s': %s\n",
                            uri,
                            error->message);
-                g_error_free(error);
         }
 }
 
@@ -508,11 +507,10 @@ void
 run_open_photos_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
         char uri[270];
-        GError *error = NULL;
+        g_autoptr(GError) error = NULL;
         sprintf(uri, "file://%s", g_get_user_special_dir(G_USER_DIRECTORY_PICTURES));
         if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
                 g_printerr("Could not launch image viewer: %s\n", error->message);
-                g_error_free(error);
         }
 }
 
@@ -573,13 +571,12 @@ check_point_inside_bounds(int x, int y, int *bounds_x, int *bounds_y)
 static void
 on_zbar_dialog_response(GtkDialog *dialog, int response, char *data)
 {
-        GError *error = NULL;
+        g_autoptr(GError) error = NULL;
         switch (response) {
         case GTK_RESPONSE_YES:
                 if (!g_app_info_launch_default_for_uri(data, NULL, &error)) {
                         g_printerr("Could not launch application: %s\n",
                                    error->message);
-                        g_error_free(error);
                 }
         case GTK_RESPONSE_ACCEPT: {
                 GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
@@ -925,12 +922,11 @@ update_ui_rotation()
 static void
 display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
 {
-        GError *error = NULL;
+        g_autoptr(GError) error = NULL;
         GVariant *result = g_dbus_connection_call_finish(conn, res, &error);
 
         if (!result) {
                 printf("Failed to get display configuration: %s\n", error->message);
-                g_error_free(error);
                 return;
         }
 
