@@ -60,7 +60,7 @@ dbus_brightness_init(GObject *src, GAsyncResult *res, gpointer *user_data)
         if (!dbus_brightness_proxy || err) {
                 printf("Failed to connect to dbus brightness service %s\n",
                        err->message);
-                g_object_unref(err);
+                g_error_free(err);
                 return;
         }
 }
@@ -145,7 +145,7 @@ brightness_received(GDBusProxy *proxy, GAsyncResult *res, gpointer user_data)
 
         if (!result) {
                 printf("Failed to get display brightness: %s\n", error->message);
-                g_object_unref(error);
+                g_error_free(error);
                 return;
         }
 

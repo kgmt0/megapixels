@@ -500,6 +500,7 @@ run_open_last_action(GSimpleAction *action, GVariant *param, gpointer user_data)
                 g_printerr("Could not launch image viewer for '%s': %s\n",
                            uri,
                            error->message);
+                g_error_free(error);
         }
 }
 
@@ -511,6 +512,7 @@ run_open_photos_action(GSimpleAction *action, GVariant *param, gpointer user_dat
         sprintf(uri, "file://%s", g_get_user_special_dir(G_USER_DIRECTORY_PICTURES));
         if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
                 g_printerr("Could not launch image viewer: %s\n", error->message);
+                g_error_free(error);
         }
 }
 
@@ -577,6 +579,7 @@ on_zbar_dialog_response(GtkDialog *dialog, int response, char *data)
                 if (!g_app_info_launch_default_for_uri(data, NULL, &error)) {
                         g_printerr("Could not launch application: %s\n",
                                    error->message);
+                        g_error_free(error);
                 }
         case GTK_RESPONSE_ACCEPT: {
                 GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(dialog));
@@ -927,7 +930,7 @@ display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_
 
         if (!result) {
                 printf("Failed to get display configuration: %s\n", error->message);
-                g_object_unref(error);
+                g_error_free(error);
                 return;
         }
 

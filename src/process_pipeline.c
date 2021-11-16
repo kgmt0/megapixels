@@ -609,6 +609,7 @@ process_capture_burst(GdkTexture *thumb)
         if (!proc) {
                 g_printerr("Failed to spawn postprocess process: %s\n",
                            error->message);
+                g_error_free(error);
                 return;
         }
 
