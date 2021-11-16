@@ -140,22 +140,20 @@ static void
 brightness_received(GDBusProxy *proxy, GAsyncResult *res, gpointer user_data)
 {
         g_autoptr(GError) error = NULL;
-        GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
+        g_autoptr(GVariant) result = g_dbus_proxy_call_finish(proxy, res, &error);
 
         if (!result) {
                 printf("Failed to get display brightness: %s\n", error->message);
                 return;
         }
 
-        GVariant *values = g_variant_get_child_value(result, 0);
+        g_autoptr(GVariant) values = g_variant_get_child_value(result, 0);
         if (g_variant_n_children(values) == 0) {
                 return;
         }
 
-        GVariant *brightness = g_variant_get_child_value(values, 0);
+        g_autoptr(GVariant) brightness = g_variant_get_child_value(values, 0);
         dbus_old_brightness = g_variant_get_int32(brightness);
-
-        g_variant_unref(result);
 }
 
 static bool
