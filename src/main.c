@@ -53,7 +53,7 @@ static int exposure;
 static bool has_auto_focus_continuous;
 static bool has_auto_focus_start;
 
-static bool flash_enabled = true;
+static bool flash_enabled = false;
 
 static bool setting_save_dng;
 
