@@ -923,7 +923,8 @@ static void
 display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
 {
         g_autoptr(GError) error = NULL;
-        g_autoptr(GVariant) result = g_dbus_connection_call_finish(conn, res, &error);
+        g_autoptr(GVariant) result =
+                g_dbus_connection_call_finish(conn, res, &error);
 
         if (!result) {
                 printf("Failed to get display configuration: %s\n", error->message);
