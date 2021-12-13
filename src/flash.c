@@ -55,12 +55,11 @@ static int dbus_old_brightness = 0;
 static void
 dbus_brightness_init(GObject *src, GAsyncResult *res, gpointer *user_data)
 {
-        GError *err = NULL;
+        g_autoptr(GError) err = NULL;
         dbus_brightness_proxy = g_dbus_proxy_new_finish(res, &err);
         if (!dbus_brightness_proxy || err) {
                 printf("Failed to connect to dbus brightness service %s\n",
                        err->message);
-                g_error_free(err);
                 return;
         }
 }
@@ -140,24 +139,21 @@ set_display_brightness(int brightness)
 static void
 brightness_received(GDBusProxy *proxy, GAsyncResult *res, gpointer user_data)
 {
-        GError *error = NULL;
-        GVariant *result = g_dbus_proxy_call_finish(proxy, res, &error);
+        g_autoptr(GError) error = NULL;
+        g_autoptr(GVariant) result = g_dbus_proxy_call_finish(proxy, res, &error);
 
         if (!result) {
                 printf("Failed to get display brightness: %s\n", error->message);
-                g_error_free(error);
                 return;
         }
 
-        GVariant *values = g_variant_get_child_value(result, 0);
+        g_autoptr(GVariant) values = g_variant_get_child_value(result, 0);
         if (g_variant_n_children(values) == 0) {
                 return;
         }
 
-        GVariant *brightness = g_variant_get_child_value(values, 0);
+        g_autoptr(GVariant) brightness = g_variant_get_child_value(values, 0);
         dbus_old_brightness = g_variant_get_int32(brightness);
-
-        g_variant_unref(result);
 }
 
 static bool
