@@ -26,6 +26,14 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.4.3" date="2021-12-13">
+			<description>
+				<p>
+					<li>Disable flash by default</li>
+					<li>Fix some small memory leaks</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.4.2" date="2021-11-17">
 			<description>
 				<p>
