@@ -923,20 +923,20 @@ static void
 display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
 {
         g_autoptr(GError) error = NULL;
-        GVariant *result = g_dbus_connection_call_finish(conn, res, &error);
+        g_autoptr(GVariant) result = g_dbus_connection_call_finish(conn, res, &error);
 
         if (!result) {
                 printf("Failed to get display configuration: %s\n", error->message);
                 return;
         }
 
-        GVariant *configs = g_variant_get_child_value(result, 1);
+        g_autoptr(GVariant) configs = g_variant_get_child_value(result, 1);
         if (g_variant_n_children(configs) == 0) {
                 return;
         }
 
-        GVariant *config = g_variant_get_child_value(configs, 0);
-        GVariant *rot_config = g_variant_get_child_value(config, 7);
+        g_autoptr(GVariant) config = g_variant_get_child_value(configs, 0);
+        g_autoptr(GVariant) rot_config = g_variant_get_child_value(config, 7);
         uint32_t rotation_index = g_variant_get_uint32(rot_config);
 
         assert(rotation_index < 4);
@@ -947,8 +947,6 @@ display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_
                 update_io_pipeline();
                 update_ui_rotation();
         }
-
-        g_variant_unref(result);
 }
 
 static void
