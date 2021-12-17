@@ -196,7 +196,7 @@ By the way, regarding steps 1 and 2, you can manually inspect the list of
 the `media-ctl` tool. This is what the current kernel and hardware revision
 return:
 ```shell-session
-$ media-tcl -d /dev/media1 -p
+$ media-ctl -d /dev/media1 -p
 
 Media controller API version 5.7.19
  
