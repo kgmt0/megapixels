@@ -15,6 +15,8 @@ MPDevice *mp_device_open(const char *path);
 MPDevice *mp_device_new(int fd);
 void mp_device_close(MPDevice *device);
 
+int mp_device_get_fd(const MPDevice *device);
+
 bool mp_device_setup_link(MPDevice *device,
                           uint32_t source_pad_id,
                           uint32_t sink_pad_id,
@@ -62,4 +64,5 @@ MPDevice *mp_device_list_find_remove(MPDeviceList **device_list,
 MPDevice *mp_device_list_remove(MPDeviceList **device_list);
 
 MPDevice *mp_device_list_get(const MPDeviceList *device_list);
+const char *mp_device_list_get_path(const MPDeviceList *device_list);
 MPDeviceList *mp_device_list_next(const MPDeviceList *device_list);
