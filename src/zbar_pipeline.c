@@ -174,7 +174,11 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
         assert(image->pixel_format == MP_PIXEL_FMT_BGGR8 ||
                image->pixel_format == MP_PIXEL_FMT_GBRG8 ||
                image->pixel_format == MP_PIXEL_FMT_GRBG8 ||
-               image->pixel_format == MP_PIXEL_FMT_RGGB8);
+               image->pixel_format == MP_PIXEL_FMT_RGGB8 ||
+               image->pixel_format == MP_PIXEL_FMT_BGGR10P ||
+               image->pixel_format == MP_PIXEL_FMT_GBRG10P ||
+               image->pixel_format == MP_PIXEL_FMT_GRBG10P ||
+               image->pixel_format == MP_PIXEL_FMT_RGGB10P);
 
         // Create a grayscale image for scanning from the current preview.
         // Rotate/mirror correctly.
@@ -182,11 +186,46 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
         int height = image->height / 2;
 
         uint8_t *data = malloc(width * height * sizeof(uint8_t));
+        size_t row_length =
+                mp_pixel_format_width_to_bytes(image->pixel_format, image->width);
         size_t i = 0;
-        for (int y = 0; y < image->height; y += 2) {
-                for (int x = 0; x < image->width; x += 2) {
-                        data[i++] = image->data[x + image->width * y];
+        size_t offset;
+        switch (image->pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_RGGB8:
+                for (int y = 0; y < image->height; y += 2) {
+                        for (int x = 0; x < row_length; x += 2) {
+                                data[i++] = image->data[x + row_length * y];
+                        }
                 }
+                break;
+        case MP_PIXEL_FMT_BGGR10P:
+        case MP_PIXEL_FMT_GBRG10P:
+        case MP_PIXEL_FMT_GRBG10P:
+        case MP_PIXEL_FMT_RGGB10P:
+                // Skip 5th byte of each 4-pixel segment by incrementing an
+                // offset every time a 5th byte is reached, making the
+                // X coordinate land on the next byte:
+                //
+                // image->data | | | | X | | | | X | | | | X | | | | X | ...
+                // x           0   2   4   6   8  10  12  14  16  18  20 ...
+                // offset      0       1       2       3       4       5 ...
+                //                     >       --->    ----->  ------->
+                // x + offset  0   2     4   6     8  10    12  16    18 ...
+                for (int y = 0; y < image->height; y += 2) {
+                        offset = 0;
+                        for (int x = 0; x < image->width; x += 2) {
+                                if (x % 4 == 0)
+                                        offset += 1;
+
+                                data[i++] = image->data[x + offset + row_length * y];
+                        }
+                }
+                break;
+        default:
+                assert(0);
         }
 
         // Create image for zbar
