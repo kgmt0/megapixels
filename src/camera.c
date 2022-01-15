@@ -771,6 +771,13 @@ mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index)
         buf.type = buftype;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = buffer_index;
+
+        struct v4l2_plane planes[1];
+        if (camera->use_mplane) {
+                buf.m.planes = planes;
+                buf.length = 1;
+        }
+
         if (xioctl(camera->video_fd, VIDIOC_QBUF, &buf) == -1) {
                 errno_printerr("VIDIOC_QBUF");
                 return false;
