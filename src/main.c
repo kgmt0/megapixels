@@ -536,7 +536,7 @@ run_about_action(GSimpleAction *action, GVariant *param, GApplication *app)
                               "comments",
                               "The postmarketOS camera application",
                               "website",
-                              "https://sr.ht/~martijnbraam/megapixels",
+                              "https://gitlab.com/postmarketOS/megapixels",
                               "version",
                               VERSION,
                               "license-type",
