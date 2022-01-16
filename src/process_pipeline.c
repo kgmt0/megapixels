@@ -297,7 +297,7 @@ process_image_for_preview(const uint8_t *image)
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_LUMINANCE,
-                     mode.width,
+                     mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width),
                      mode.height,
                      0,
                      GL_LUMINANCE,

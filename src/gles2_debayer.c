@@ -8,12 +8,15 @@
 #define TEX_COORD_ATTRIBUTE 1
 
 struct _GLES2Debayer {
+        MPPixelFormat format;
+
         GLuint frame_buffer;
         GLuint program;
         GLuint uniform_transform;
         GLuint uniform_pixel_size;
         GLuint uniform_texture;
         GLuint uniform_color_matrix;
+        GLuint uniform_row_length;
 
         GLuint quad;
 };
@@ -21,13 +24,21 @@ struct _GLES2Debayer {
 GLES2Debayer *
 gles2_debayer_new(MPPixelFormat format)
 {
-        if (format != MP_PIXEL_FMT_BGGR8) {
+        if (format != MP_PIXEL_FMT_BGGR8 && format != MP_PIXEL_FMT_BGGR10P) {
                 return NULL;
         }
 
         GLuint frame_buffer;
         glGenFramebuffers(1, &frame_buffer);
         check_gl();
+
+        char format_def[32];
+        snprintf(format_def,
+                 32,
+                 "#define BITS_%d\n",
+                 mp_pixel_format_bits_per_pixel(format));
+
+        const GLchar *def[1] = { format_def };
 
         GLuint shaders[] = {
                 gl_util_load_shader("/org/postmarketos/Megapixels/debayer.vert",
@@ -36,8 +47,8 @@ gles2_debayer_new(MPPixelFormat format)
                                     0),
                 gl_util_load_shader("/org/postmarketos/Megapixels/debayer.frag",
                                     GL_FRAGMENT_SHADER,
-                                    NULL,
-                                    0),
+                                    def,
+                                    1),
         };
 
         GLuint program = gl_util_link_program(shaders, 2);
@@ -46,6 +57,8 @@ gles2_debayer_new(MPPixelFormat format)
         check_gl();
 
         GLES2Debayer *self = malloc(sizeof(GLES2Debayer));
+        self->format = format;
+
         self->frame_buffer = frame_buffer;
         self->program = program;
 
@@ -54,6 +67,9 @@ gles2_debayer_new(MPPixelFormat format)
         self->uniform_texture = glGetUniformLocation(self->program, "texture");
         self->uniform_color_matrix =
                 glGetUniformLocation(self->program, "color_matrix");
+        if (mp_pixel_format_bits_per_pixel(self->format) == 10)
+                self->uniform_row_length =
+                        glGetUniformLocation(self->program, "row_length");
         check_gl();
 
         self->quad = gl_util_new_quad();
@@ -135,6 +151,12 @@ gles2_debayer_configure(GLES2Debayer *self,
                         self->uniform_color_matrix, 1, GL_FALSE, identity);
         }
         check_gl();
+
+        if (mp_pixel_format_bits_per_pixel(self->format) == 10) {
+                assert(src_width % 4 == 0);
+                glUniform1f(self->uniform_row_length, src_width + src_width / 4);
+                check_gl();
+        }
 }
 
 void

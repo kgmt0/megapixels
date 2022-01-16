@@ -1,14 +1,30 @@
 #ifdef GL_ES
-precision mediump float;
+precision highp float;
 #endif
 
 uniform sampler2D texture;
 uniform mat3 color_matrix;
+#ifdef BITS_10
+uniform float row_length;
+#endif
 
 varying vec2 top_left_uv;
 varying vec2 top_right_uv;
 varying vec2 bottom_left_uv;
 varying vec2 bottom_right_uv;
+
+#ifdef BITS_10
+vec2
+skip_5th_pixel(vec2 uv)
+{
+        vec2 new_uv = uv;
+
+        new_uv.x *= 0.8;
+        new_uv.x += floor(uv.x * row_length / 5.0) / row_length;
+
+        return new_uv;
+}
+#endif
 
 void
 main()
@@ -16,10 +32,17 @@ main()
         // Note the coordinates for texture samples need to be a varying, as the
         // Mali-400 has this as a fast path allowing 32-bit floats. Otherwise
         // they end up as 16-bit floats and that's not accurate enough.
+#ifdef BITS_10
+        vec4 samples = vec4(texture2D(texture, skip_5th_pixel(top_left_uv)).r,
+                            texture2D(texture, skip_5th_pixel(top_right_uv)).r,
+                            texture2D(texture, skip_5th_pixel(bottom_left_uv)).r,
+                            texture2D(texture, skip_5th_pixel(bottom_right_uv)).r);
+#else
         vec4 samples = vec4(texture2D(texture, top_left_uv).r,
                             texture2D(texture, top_right_uv).r,
                             texture2D(texture, bottom_left_uv).r,
                             texture2D(texture, bottom_right_uv).r);
+#endif
 
         // Assume BGGR for now. Currently this just takes 3 of the four samples
         // for each pixel, there's room here to do some better debayering.
