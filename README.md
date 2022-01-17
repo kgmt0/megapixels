@@ -60,7 +60,7 @@ when previewing.
 
 * `width=640` and `height=480` the resolution to use for the sensor
 * `rate=15` the refresh rate in fps to use for the sensor
-* `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor, only BGGR8 is fully supported
+* `fmt=BGGR8` sets the pixel and bus formats used when capturing from the sensor.
 
 # Post processing
 

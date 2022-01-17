@@ -224,13 +224,8 @@ init_gl(MPPipeline *pipeline, GdkSurface **surface)
                 check_gl();
         }
 
-        gles2_debayer = gles2_debayer_new(MP_PIXEL_FMT_BGGR8);
-        check_gl();
-
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         check_gl();
-
-        gles2_debayer_use(gles2_debayer);
 
         for (size_t i = 0; i < NUM_BUFFERS; ++i) {
                 glGenTextures(1, &output_buffers[i].texture_id);
@@ -718,7 +713,7 @@ mp_process_pipeline_capture()
 }
 
 static void
-on_output_changed()
+on_output_changed(bool format_changed)
 {
         output_buffer_width = mode.width / 2;
         output_buffer_height = mode.height / 2;
@@ -743,6 +738,17 @@ on_output_changed()
         }
 
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Create new gles2_debayer on format change
+        if (format_changed) {
+                if (gles2_debayer)
+                        gles2_debayer_free(gles2_debayer);
+
+                gles2_debayer = gles2_debayer_new(mode.pixel_format);
+                check_gl();
+
+                gles2_debayer_use(gles2_debayer);
+        }
 
         gles2_debayer_configure(
                 gles2_debayer,
@@ -772,6 +778,8 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
                 preview_height != state->preview_height ||
                 device_rotation != state->device_rotation;
 
+        const bool format_changed = mode.pixel_format != state->mode.pixel_format;
+
         camera = state->camera;
         mode = state->mode;
 
@@ -793,7 +801,7 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
         if (output_changed) {
                 camera_rotation = mod(camera->rotate - device_rotation, 360);
 
-                on_output_changed();
+                on_output_changed(format_changed);
         }
 
         struct mp_main_state main_state = {

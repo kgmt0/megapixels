@@ -24,7 +24,10 @@ struct _GLES2Debayer {
 GLES2Debayer *
 gles2_debayer_new(MPPixelFormat format)
 {
-        if (format != MP_PIXEL_FMT_BGGR8 && format != MP_PIXEL_FMT_BGGR10P) {
+        if (format != MP_PIXEL_FMT_BGGR8 && format != MP_PIXEL_FMT_GBRG8 &&
+            format != MP_PIXEL_FMT_GRBG8 && format != MP_PIXEL_FMT_RGGB8 &&
+            format != MP_PIXEL_FMT_BGGR10P && format != MP_PIXEL_FMT_GBRG10P &&
+            format != MP_PIXEL_FMT_GRBG10P && format != MP_PIXEL_FMT_RGGB10P) {
                 return NULL;
         }
 
@@ -32,10 +35,11 @@ gles2_debayer_new(MPPixelFormat format)
         glGenFramebuffers(1, &frame_buffer);
         check_gl();
 
-        char format_def[32];
+        char format_def[64];
         snprintf(format_def,
-                 32,
-                 "#define BITS_%d\n",
+                 64,
+                 "#define CFA_%s\n#define BITS_%d\n",
+                 mp_pixel_format_cfa(format),
                  mp_pixel_format_bits_per_pixel(format));
 
         const GLchar *def[1] = { format_def };

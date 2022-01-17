@@ -144,6 +144,38 @@ mp_pixel_format_pixel_depth(MPPixelFormat pixel_format)
         }
 }
 
+const char *
+mp_pixel_format_cfa(MPPixelFormat pixel_format)
+{
+        g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+        switch (pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_BGGR10P:
+                return "BGGR";
+                break;
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GBRG10P:
+                return "GBRG";
+                break;
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_GRBG10P:
+                return "GRBG";
+                break;
+        case MP_PIXEL_FMT_RGGB8:
+        case MP_PIXEL_FMT_RGGB10P:
+                return "RGGB";
+                break;
+        case MP_PIXEL_FMT_UYVY:
+                return "UYUV";
+                break;
+        case MP_PIXEL_FMT_YUYV:
+                return "YUYV";
+                break;
+        default:
+                return "unsupported";
+        }
+}
+
 uint32_t
 mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width)
 {

@@ -44,9 +44,15 @@ main()
                             texture2D(texture, bottom_right_uv).r);
 #endif
 
-        // Assume BGGR for now. Currently this just takes 3 of the four samples
-        // for each pixel, there's room here to do some better debayering.
+#if defined(CFA_BGGR)
         vec3 color = vec3(samples.w, (samples.y + samples.z) / 2.0, samples.x);
+#elif defined(CFA_GBRG)
+        vec3 color = vec3(samples.z, (samples.x + samples.w) / 2.0, samples.y);
+#elif defined(CFA_GRBG)
+        vec3 color = vec3(samples.y, (samples.x + samples.w) / 2.0, samples.z);
+#else
+        vec3 color = vec3(samples.x, (samples.y + samples.z) / 2.0, samples.w);
+#endif
 
         // Some crude blacklevel correction to make the preview a bit nicer, this
         // should be an uniform
