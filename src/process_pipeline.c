@@ -174,6 +174,37 @@ mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf)
         return buf->texture_id;
 }
 
+static void
+repack_image_sequencial(const uint8_t *src_buf,
+                        uint8_t *dst_buf,
+                        size_t width,
+                        size_t height)
+{
+        uint16_t pixels[4];
+
+        /*
+         * Repack 40 bits stored in sensor format into sequencial format
+         *
+         * src_buf: 11111111 22222222 33333333 44444444 11223344 ...
+         * dst_buf: 11111111 11222222 22223333 33333344 44444444 ...
+         */
+        assert(width % 4 == 0);
+        for (size_t i = 0; i < (width + width / 4) * height; i += 5) {
+                /* Extract pixels from packed sensor format */
+                pixels[0] = (src_buf[i] << 2) | (src_buf[i + 4] >> 6);
+                pixels[1] = (src_buf[i + 1] << 2) | (src_buf[i + 4] >> 4 & 0x03);
+                pixels[2] = (src_buf[i + 2] << 2) | (src_buf[i + 4] >> 2 & 0x03);
+                pixels[3] = (src_buf[i + 3] << 2) | (src_buf[i + 4] & 0x03);
+
+                /* Pack pixels into sequencial format */
+                dst_buf[i] = (pixels[0] >> 2 & 0xff);
+                dst_buf[i + 1] = (pixels[0] << 6 & 0xff) | (pixels[1] >> 4 & 0x3f);
+                dst_buf[i + 2] = (pixels[1] << 4 & 0xff) | (pixels[2] >> 6 & 0x0f);
+                dst_buf[i + 3] = (pixels[2] << 2 & 0xff) | (pixels[3] >> 8 & 0x03);
+                dst_buf[i + 4] = (pixels[3] & 0xff);
+        }
+}
+
 static GLES2Debayer *gles2_debayer = NULL;
 
 static GdkGLContext *context;
@@ -475,16 +506,31 @@ process_image_for_capture(const uint8_t *image, int count)
         TIFFCheckpointDirectory(tif);
         printf("Writing frame to %s\n", fname);
 
+        uint8_t *output_image = (uint8_t *)image;
+
+        // Repack 10-bit image from sensor format into a sequencial format
+        if (mp_pixel_format_bits_per_pixel(mode.pixel_format) == 10) {
+                output_image = malloc(mp_pixel_format_width_to_bytes(
+                                              mode.pixel_format, mode.width) *
+                                      mode.height);
+
+                repack_image_sequencial(
+                        image, output_image, mode.width, mode.height);
+        }
+
         for (int row = 0; row < mode.height; row++) {
                 TIFFWriteScanline(
                         tif,
-                        (void *)image +
+                        (void *)output_image +
                                 (row * mp_pixel_format_width_to_bytes(
                                                mode.pixel_format, mode.width)),
                         row,
                         0);
         }
         TIFFWriteDirectory(tif);
+
+        if (output_image != image)
+                free(output_image);
 
         // Add an EXIF block to the tiff
         TIFFCreateEXIFDirectory(tif);
