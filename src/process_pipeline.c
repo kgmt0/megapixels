@@ -488,9 +488,14 @@ process_image_for_capture(const uint8_t *image, int count)
         static const short cfapatterndim[] = { 2, 2 };
         TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, cfapatterndim);
 #if (TIFFLIB_VERSION < 20201219) && !LIBTIFF_CFA_PATTERN
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, "\002\001\001\000"); // BGGR
+        TIFFSetField(tif,
+                     TIFFTAG_CFAPATTERN,
+                     mp_pixel_format_cfa_pattern(mode.pixel_format));
 #else
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\002\001\001\000"); // BGGR
+        TIFFSetField(tif,
+                     TIFFTAG_CFAPATTERN,
+                     4,
+                     mp_pixel_format_cfa_pattern(mode.pixel_format));
 #endif
         printf("TIFF version %d\n", TIFFLIB_VERSION);
         int whitelevel = camera->whitelevel;
