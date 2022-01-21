@@ -54,6 +54,7 @@ struct camera_info {
 
 struct device_info {
         const char *media_dev_name; // owned by camera config
+        const char *dev_name; // owned by camera config
 
         MPDevice *device;
 
@@ -132,8 +133,10 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
         // Find device info
         size_t device_index = 0;
         for (; device_index < num_devices; ++device_index) {
-                if (strcmp(config->media_dev_name,
-                           devices[device_index].media_dev_name) == 0) {
+                if ((strcmp(config->media_dev_name,
+                            devices[device_index].media_dev_name) == 0) &&
+                    (strcmp(config->dev_name, devices[device_index].dev_name) ==
+                     0)) {
                         break;
                 }
         }
@@ -144,8 +147,9 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
                 // Initialize new device
                 struct device_info *info = &devices[device_index];
                 info->media_dev_name = config->media_dev_name;
-                info->device = mp_device_list_find_remove(device_list,
-                                                          info->media_dev_name);
+                info->dev_name = config->dev_name;
+                info->device = mp_device_list_find_remove(
+                        device_list, info->media_dev_name, info->dev_name);
                 if (!info->device) {
                         g_printerr("Could not find /dev/media* node matching '%s'\n",
                                    info->media_dev_name);

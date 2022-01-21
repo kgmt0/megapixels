@@ -19,22 +19,18 @@ get_time()
 int
 main(int argc, char *argv[])
 {
-        if (argc != 2 && argc != 3) {
-                printf("Usage: %s <media_device_name> [<sub_device_name>]\n",
-                       argv[0]);
+        if (argc != 3) {
+                printf("Usage: %s <media_device_name> <sub_device_name>\n", argv[0]);
                 return 1;
         }
 
         char *video_name = argv[1];
-        char *subdev_name = NULL;
-        if (argc == 3) {
-                subdev_name = argv[2];
-        }
+        char *subdev_name = argv[2];
 
         double find_start = get_time();
 
         // First find the device
-        MPDevice *device = mp_device_find(video_name);
+        MPDevice *device = mp_device_find(video_name, subdev_name);
         if (!device) {
                 printf("Device not found\n");
                 return 1;
@@ -73,50 +69,46 @@ main(int argc, char *argv[])
         }
 
         int subdev_fd = -1;
-        if (subdev_name) {
-                const struct media_v2_entity *entity =
-                        mp_device_find_entity(device, subdev_name);
-                if (!entity) {
-                        printf("Unable to find sub-device\n");
-                        return 1;
+        const struct media_v2_entity *entity =
+                mp_device_find_entity(device, subdev_name);
+        if (!entity) {
+                printf("Unable to find sub-device\n");
+                return 1;
+        }
+
+        const struct media_v2_pad *source_pad =
+                mp_device_get_pad_from_entity(device, entity->id);
+        const struct media_v2_pad *sink_pad =
+                mp_device_get_pad_from_entity(device, video_entity_id);
+
+        // Disable other links
+        const struct media_v2_entity *entities = mp_device_get_entities(device);
+        for (int i = 0; i < mp_device_get_num_entities(device); ++i) {
+                if (entities[i].id != video_entity_id &&
+                    entities[i].id != entity->id) {
+                        const struct media_v2_pad *pad =
+                                mp_device_get_pad_from_entity(device,
+                                                              entities[i].id);
+                        mp_device_setup_link(device, pad->id, sink_pad->id, false);
                 }
+        }
 
-                const struct media_v2_pad *source_pad =
-                        mp_device_get_pad_from_entity(device, entity->id);
-                const struct media_v2_pad *sink_pad =
-                        mp_device_get_pad_from_entity(device, video_entity_id);
+        // Then enable ours
+        mp_device_setup_link(device, source_pad->id, sink_pad->id, true);
 
-                // Disable other links
-                const struct media_v2_entity *entities =
-                        mp_device_get_entities(device);
-                for (int i = 0; i < mp_device_get_num_entities(device); ++i) {
-                        if (entities[i].id != video_entity_id &&
-                            entities[i].id != entity->id) {
-                                const struct media_v2_pad *pad =
-                                        mp_device_get_pad_from_entity(
-                                                device, entities[i].id);
-                                mp_device_setup_link(
-                                        device, pad->id, sink_pad->id, false);
-                        }
-                }
+        const struct media_v2_interface *iface =
+                mp_device_find_entity_interface(device, entity->id);
 
-                // Then enable ours
-                mp_device_setup_link(device, source_pad->id, sink_pad->id, true);
+        char buf[256];
+        if (!mp_find_device_path(iface->devnode, buf, 256)) {
+                printf("Unable to find sub-device path\n");
+                return 1;
+        }
 
-                const struct media_v2_interface *iface =
-                        mp_device_find_entity_interface(device, entity->id);
-
-                char buf[256];
-                if (!mp_find_device_path(iface->devnode, buf, 256)) {
-                        printf("Unable to find sub-device path\n");
-                        return 1;
-                }
-
-                subdev_fd = open(buf, O_RDWR);
-                if (subdev_fd == -1) {
-                        printf("Unable to open sub-device\n");
-                        return 1;
-                }
+        subdev_fd = open(buf, O_RDWR);
+        if (subdev_fd == -1) {
+                printf("Unable to open sub-device\n");
+                return 1;
         }
 
         double open_end = get_time();

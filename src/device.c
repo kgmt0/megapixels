@@ -74,11 +74,12 @@ xioctl(int fd, int request, void *arg)
 }
 
 MPDevice *
-mp_device_find(const char *driver_name)
+mp_device_find(const char *driver_name, const char *dev_name)
 {
         MPDeviceList *list = mp_device_list_new();
 
-        MPDevice *found_device = mp_device_list_find_remove(&list, driver_name);
+        MPDevice *found_device =
+                mp_device_list_find_remove(&list, driver_name, dev_name);
 
         mp_device_list_free(list);
 
@@ -476,7 +477,9 @@ mp_device_list_free(MPDeviceList *device_list)
 }
 
 MPDevice *
-mp_device_list_find_remove(MPDeviceList **list, const char *driver_name)
+mp_device_list_find_remove(MPDeviceList **list,
+                           const char *driver_name,
+                           const char *dev_name)
 {
         MPDevice *found_device = NULL;
         int length = strlen(driver_name);
@@ -485,7 +488,8 @@ mp_device_list_find_remove(MPDeviceList **list, const char *driver_name)
                 MPDevice *device = mp_device_list_get(*list);
                 const struct media_device_info *info = mp_device_get_info(device);
 
-                if (strncmp(info->driver, driver_name, length) == 0) {
+                if (strncmp(info->driver, driver_name, length) == 0 &&
+                    mp_device_find_entity(device, dev_name)) {
                         found_device = mp_device_list_remove(list);
                         break;
                 }
