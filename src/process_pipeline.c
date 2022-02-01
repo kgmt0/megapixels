@@ -174,6 +174,37 @@ mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf)
         return buf->texture_id;
 }
 
+static void
+repack_image_sequencial(const uint8_t *src_buf,
+                        uint8_t *dst_buf,
+                        size_t width,
+                        size_t height)
+{
+        uint16_t pixels[4];
+
+        /*
+         * Repack 40 bits stored in sensor format into sequencial format
+         *
+         * src_buf: 11111111 22222222 33333333 44444444 11223344 ...
+         * dst_buf: 11111111 11222222 22223333 33333344 44444444 ...
+         */
+        assert(width % 4 == 0);
+        for (size_t i = 0; i < (width + width / 4) * height; i += 5) {
+                /* Extract pixels from packed sensor format */
+                pixels[0] = (src_buf[i] << 2) | (src_buf[i + 4] >> 6);
+                pixels[1] = (src_buf[i + 1] << 2) | (src_buf[i + 4] >> 4 & 0x03);
+                pixels[2] = (src_buf[i + 2] << 2) | (src_buf[i + 4] >> 2 & 0x03);
+                pixels[3] = (src_buf[i + 3] << 2) | (src_buf[i + 4] & 0x03);
+
+                /* Pack pixels into sequencial format */
+                dst_buf[i] = (pixels[0] >> 2 & 0xff);
+                dst_buf[i + 1] = (pixels[0] << 6 & 0xff) | (pixels[1] >> 4 & 0x3f);
+                dst_buf[i + 2] = (pixels[1] << 4 & 0xff) | (pixels[2] >> 6 & 0x0f);
+                dst_buf[i + 3] = (pixels[2] << 2 & 0xff) | (pixels[3] >> 8 & 0x03);
+                dst_buf[i + 4] = (pixels[3] & 0xff);
+        }
+}
+
 static GLES2Debayer *gles2_debayer = NULL;
 
 static GdkGLContext *context;
@@ -224,13 +255,8 @@ init_gl(MPPipeline *pipeline, GdkSurface **surface)
                 check_gl();
         }
 
-        gles2_debayer = gles2_debayer_new(MP_PIXEL_FMT_BGGR8);
-        check_gl();
-
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         check_gl();
-
-        gles2_debayer_use(gles2_debayer);
 
         for (size_t i = 0; i < NUM_BUFFERS; ++i) {
                 glGenTextures(1, &output_buffers[i].texture_id);
@@ -297,7 +323,7 @@ process_image_for_preview(const uint8_t *image)
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_LUMINANCE,
-                     mode.width,
+                     mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width),
                      mode.height,
                      0,
                      GL_LUMINANCE,
@@ -462,9 +488,14 @@ process_image_for_capture(const uint8_t *image, int count)
         static const short cfapatterndim[] = { 2, 2 };
         TIFFSetField(tif, TIFFTAG_CFAREPEATPATTERNDIM, cfapatterndim);
 #if (TIFFLIB_VERSION < 20201219) && !LIBTIFF_CFA_PATTERN
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, "\002\001\001\000"); // BGGR
+        TIFFSetField(tif,
+                     TIFFTAG_CFAPATTERN,
+                     mp_pixel_format_cfa_pattern(mode.pixel_format));
 #else
-        TIFFSetField(tif, TIFFTAG_CFAPATTERN, 4, "\002\001\001\000"); // BGGR
+        TIFFSetField(tif,
+                     TIFFTAG_CFAPATTERN,
+                     4,
+                     mp_pixel_format_cfa_pattern(mode.pixel_format));
 #endif
         printf("TIFF version %d\n", TIFFLIB_VERSION);
         int whitelevel = camera->whitelevel;
@@ -480,16 +511,31 @@ process_image_for_capture(const uint8_t *image, int count)
         TIFFCheckpointDirectory(tif);
         printf("Writing frame to %s\n", fname);
 
+        uint8_t *output_image = (uint8_t *)image;
+
+        // Repack 10-bit image from sensor format into a sequencial format
+        if (mp_pixel_format_bits_per_pixel(mode.pixel_format) == 10) {
+                output_image = malloc(mp_pixel_format_width_to_bytes(
+                                              mode.pixel_format, mode.width) *
+                                      mode.height);
+
+                repack_image_sequencial(
+                        image, output_image, mode.width, mode.height);
+        }
+
         for (int row = 0; row < mode.height; row++) {
                 TIFFWriteScanline(
                         tif,
-                        (void *)image +
+                        (void *)output_image +
                                 (row * mp_pixel_format_width_to_bytes(
                                                mode.pixel_format, mode.width)),
                         row,
                         0);
         }
         TIFFWriteDirectory(tif);
+
+        if (output_image != image)
+                free(output_image);
 
         // Add an EXIF block to the tiff
         TIFFCreateEXIFDirectory(tif);
@@ -718,7 +764,7 @@ mp_process_pipeline_capture()
 }
 
 static void
-on_output_changed()
+on_output_changed(bool format_changed)
 {
         output_buffer_width = mode.width / 2;
         output_buffer_height = mode.height / 2;
@@ -743,6 +789,17 @@ on_output_changed()
         }
 
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Create new gles2_debayer on format change
+        if (format_changed) {
+                if (gles2_debayer)
+                        gles2_debayer_free(gles2_debayer);
+
+                gles2_debayer = gles2_debayer_new(mode.pixel_format);
+                check_gl();
+
+                gles2_debayer_use(gles2_debayer);
+        }
 
         gles2_debayer_configure(
                 gles2_debayer,
@@ -772,6 +829,8 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
                 preview_height != state->preview_height ||
                 device_rotation != state->device_rotation;
 
+        const bool format_changed = mode.pixel_format != state->mode.pixel_format;
+
         camera = state->camera;
         mode = state->mode;
 
@@ -793,7 +852,7 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
         if (output_changed) {
                 camera_rotation = mod(camera->rotate - device_rotation, 360);
 
-                on_output_changed();
+                on_output_changed(format_changed);
         }
 
         struct mp_main_state main_state = {

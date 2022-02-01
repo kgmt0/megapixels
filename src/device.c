@@ -153,6 +153,12 @@ mp_device_close(MPDevice *device)
         free(device);
 }
 
+int
+mp_device_get_fd(const MPDevice *device)
+{
+        return device->fd;
+}
+
 bool
 mp_device_setup_link(MPDevice *device,
                      uint32_t source_pad_id,
@@ -375,6 +381,7 @@ mp_device_get_num_links(const MPDevice *device)
 struct _MPDeviceList {
         MPDevice *device;
         MPDeviceList *next;
+        char path[PATH_MAX];
 };
 
 MPDeviceList *
@@ -387,8 +394,8 @@ mp_device_list_new()
         DIR *d = opendir("/dev");
         while ((dir = readdir(d)) != NULL) {
                 if (strncmp(dir->d_name, "media", 5) == 0) {
-                        char path[261];
-                        snprintf(path, 261, "/dev/%s", dir->d_name);
+                        char path[PATH_MAX];
+                        snprintf(path, PATH_MAX, "/dev/%s", dir->d_name);
 
                         MPDevice *device = mp_device_open(path);
 
@@ -396,6 +403,7 @@ mp_device_list_new()
                                 MPDeviceList *next = malloc(sizeof(MPDeviceList));
                                 next->device = device;
                                 next->next = current;
+                                memcpy(next->path, path, sizeof(path));
                                 current = next;
                         }
                 }
@@ -459,6 +467,12 @@ MPDevice *
 mp_device_list_get(const MPDeviceList *device_list)
 {
         return device_list->device;
+}
+
+const char *
+mp_device_list_get_path(const MPDeviceList *device_list)
+{
+        return device_list->path;
 }
 
 MPDeviceList *

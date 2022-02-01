@@ -144,6 +144,64 @@ mp_pixel_format_pixel_depth(MPPixelFormat pixel_format)
         }
 }
 
+const char *
+mp_pixel_format_cfa(MPPixelFormat pixel_format)
+{
+        g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+        switch (pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_BGGR10P:
+                return "BGGR";
+                break;
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GBRG10P:
+                return "GBRG";
+                break;
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_GRBG10P:
+                return "GRBG";
+                break;
+        case MP_PIXEL_FMT_RGGB8:
+        case MP_PIXEL_FMT_RGGB10P:
+                return "RGGB";
+                break;
+        case MP_PIXEL_FMT_UYVY:
+                return "UYUV";
+                break;
+        case MP_PIXEL_FMT_YUYV:
+                return "YUYV";
+                break;
+        default:
+                return "unsupported";
+        }
+}
+
+const char *
+mp_pixel_format_cfa_pattern(MPPixelFormat pixel_format)
+{
+        g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
+        switch (pixel_format) {
+        case MP_PIXEL_FMT_BGGR8:
+        case MP_PIXEL_FMT_BGGR10P:
+                return "\002\001\001\000";
+                break;
+        case MP_PIXEL_FMT_GBRG8:
+        case MP_PIXEL_FMT_GBRG10P:
+                return "\001\002\000\001";
+                break;
+        case MP_PIXEL_FMT_GRBG8:
+        case MP_PIXEL_FMT_GRBG10P:
+                return "\001\000\002\001";
+                break;
+        case MP_PIXEL_FMT_RGGB8:
+        case MP_PIXEL_FMT_RGGB10P:
+                return "\000\001\001\002";
+                break;
+        default:
+                return NULL;
+        }
+}
+
 uint32_t
 mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width)
 {
@@ -264,7 +322,6 @@ mp_camera_new(int video_fd, int subdev_fd)
         bool use_mplane;
         if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
                 use_mplane = true;
-                printf("!!\n");
         } else if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) {
                 use_mplane = false;
         } else {
@@ -394,10 +451,19 @@ mp_camera_get_subdev_fd(MPCamera *camera)
         return camera->subdev_fd;
 }
 
+static enum v4l2_buf_type
+get_buf_type(MPCamera *camera)
+{
+        if (camera->use_mplane) {
+                return V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        }
+        return V4L2_BUF_TYPE_VIDEO_CAPTURE;
+}
+
 static bool
 camera_mode_impl(MPCamera *camera, int request, MPCameraMode *mode)
 {
-        uint32_t pixfmt = mp_pixel_format_from_v4l_pixel_format(mode->pixel_format);
+        uint32_t pixfmt = mp_pixel_format_to_v4l_pixel_format(mode->pixel_format);
         struct v4l2_format fmt = {};
         if (camera->use_mplane) {
                 fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -460,7 +526,6 @@ mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode)
                            VIDIOC_SUBDEV_S_FRAME_INTERVAL,
                            &interval) == -1) {
                         errno_printerr("VIDIOC_SUBDEV_S_FRAME_INTERVAL");
-                        return false;
                 }
 
                 bool did_set_frame_rate = interval.interval.numerator ==
@@ -522,10 +587,7 @@ mp_camera_start_capture(MPCamera *camera)
         g_return_val_if_fail(camera->has_set_mode, false);
         g_return_val_if_fail(camera->num_buffers == 0, false);
 
-        enum v4l2_buf_type buftype = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (camera->use_mplane) {
-                buftype = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-        }
+        const enum v4l2_buf_type buftype = get_buf_type(camera);
 
         // Start by requesting buffers
         struct v4l2_requestbuffers req = {};
@@ -588,7 +650,7 @@ mp_camera_start_capture(MPCamera *camera)
                 }
 
                 struct v4l2_exportbuffer expbuf = {
-                        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                        .type = buftype,
                         .index = i,
                 };
                 if (xioctl(camera->video_fd, VIDIOC_EXPBUF, &expbuf) == -1) {
@@ -627,7 +689,7 @@ mp_camera_start_capture(MPCamera *camera)
         }
 
         // Start capture
-        enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        enum v4l2_buf_type type = buftype;
         if (xioctl(camera->video_fd, VIDIOC_STREAMON, &type) == -1) {
                 errno_printerr("VIDIOC_STREAMON");
                 goto error;
@@ -653,7 +715,7 @@ error:
         {
                 struct v4l2_requestbuffers req = {};
                 req.count = 0;
-                req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                req.type = buftype;
                 req.memory = V4L2_MEMORY_MMAP;
 
                 if (xioctl(camera->video_fd, VIDIOC_REQBUFS, &req) == -1) {
@@ -669,7 +731,9 @@ mp_camera_stop_capture(MPCamera *camera)
 {
         g_return_val_if_fail(camera->num_buffers > 0, false);
 
-        enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        const enum v4l2_buf_type buftype = get_buf_type(camera);
+
+        enum v4l2_buf_type type = buftype;
         if (xioctl(camera->video_fd, VIDIOC_STREAMOFF, &type) == -1) {
                 errno_printerr("VIDIOC_STREAMOFF");
         }
@@ -690,7 +754,7 @@ mp_camera_stop_capture(MPCamera *camera)
 
         struct v4l2_requestbuffers req = {};
         req.count = 0;
-        req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        req.type = buftype;
         req.memory = V4L2_MEMORY_MMAP;
         if (xioctl(camera->video_fd, VIDIOC_REQBUFS, &req) == -1) {
                 errno_printerr("VIDIOC_REQBUFS");
@@ -708,8 +772,10 @@ mp_camera_is_capturing(MPCamera *camera)
 bool
 mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
 {
+        const enum v4l2_buf_type buftype = get_buf_type(camera);
+
         struct v4l2_buffer buf = {};
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.type = buftype;
         buf.memory = V4L2_MEMORY_MMAP;
 
         struct v4l2_plane planes[1];
@@ -757,10 +823,19 @@ mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
 bool
 mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index)
 {
+        const enum v4l2_buf_type buftype = get_buf_type(camera);
+
         struct v4l2_buffer buf = {};
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.type = buftype;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = buffer_index;
+
+        struct v4l2_plane planes[1];
+        if (camera->use_mplane) {
+                buf.m.planes = planes;
+                buf.length = 1;
+        }
+
         if (xioctl(camera->video_fd, VIDIOC_QBUF, &buf) == -1) {
                 errno_printerr("VIDIOC_QBUF");
                 return false;
@@ -863,12 +938,14 @@ get_subdev_modes(MPCamera *camera, bool (*check)(MPCamera *, MPCameraMode *))
 static MPCameraModeList *
 get_video_modes(MPCamera *camera, bool (*check)(MPCamera *, MPCameraMode *))
 {
+        const enum v4l2_buf_type buftype = get_buf_type(camera);
+
         MPCameraModeList *item = NULL;
 
         for (uint32_t fmt_index = 0;; ++fmt_index) {
                 struct v4l2_fmtdesc fmt = {};
                 fmt.index = fmt_index;
-                fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                fmt.type = buftype;
                 if (xioctl(camera->video_fd, VIDIOC_ENUM_FMT, &fmt) == -1) {
                         if (errno != EINVAL) {
                                 errno_printerr("VIDIOC_ENUM_FMT");
