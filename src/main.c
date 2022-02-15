@@ -65,7 +65,7 @@ static char last_path[260] = "";
 
 static MPZBarScanResult *zbar_result = NULL;
 
-static int burst_length = 3;
+static int burst_length = 0;
 
 // Widgets
 GtkWidget *preview;

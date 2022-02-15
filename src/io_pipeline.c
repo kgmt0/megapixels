@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -343,13 +344,21 @@ static void
 capture(MPPipeline *pipeline, const void *data)
 {
         struct camera_info *info = &cameras[camera->index];
-
-        captures_remaining = burst_length;
+        uint32_t gain;
+        float gain_norm;
 
         // Disable the autogain/exposure while taking the burst
         mp_camera_control_set_int32(info->camera, V4L2_CID_AUTOGAIN, 0);
         mp_camera_control_set_int32(
                 info->camera, V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL);
+
+        // Get current gain to calculate a burst length;
+        // with low gain there's 2, with the max automatic gain of the ov5640
+        // the value seems to be 248 which creates a 5 frame burst
+        // for manual gain you can go up to 11 frames
+        gain = mp_camera_control_get_int32(info->camera, V4L2_CID_GAIN);
+        gain_norm = (float)gain / (float)info->gain_max;
+        burst_length = (int)(sqrt(gain_norm) * 10) + 1;
 
         // Change camera mode for capturing
         mp_process_pipeline_sync();
