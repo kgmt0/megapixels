@@ -25,6 +25,8 @@ struct mp_process_pipeline_state {
         bool has_auto_focus_continuous;
         bool has_auto_focus_start;
 
+        bool flash_enabled;
+
         bool save_dng;
 };
 

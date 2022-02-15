@@ -322,6 +322,7 @@ update_process_pipeline()
                 .exposure = current_controls.exposure,
                 .has_auto_focus_continuous = info->has_auto_focus_continuous,
                 .has_auto_focus_start = info->has_auto_focus_start,
+                .flash_enabled = flash_enabled,
         };
         mp_process_pipeline_update_state(&pipeline_state);
 }
