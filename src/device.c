@@ -1,4 +1,5 @@
 #include "device.h"
+#include "mode.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -160,6 +161,28 @@ mp_device_get_fd(const MPDevice *device)
 }
 
 bool
+mp_device_setup_entity_link(MPDevice *device,
+                            uint32_t source_entity_id,
+                            uint32_t sink_entity_id,
+                            uint32_t source_index,
+                            uint32_t sink_index,
+                            bool enabled)
+{
+        struct media_link_desc link = {};
+        link.flags = enabled ? MEDIA_LNK_FL_ENABLED : 0;
+        link.source.entity = source_entity_id;
+        link.source.index = source_index;
+        link.sink.entity = sink_entity_id;
+        link.sink.index = sink_index;
+        if (xioctl(device->fd, MEDIA_IOC_SETUP_LINK, &link) == -1) {
+                errno_printerr("MEDIA_IOC_SETUP_LINK");
+                return false;
+        }
+
+        return true;
+}
+
+bool
 mp_device_setup_link(MPDevice *device,
                      uint32_t source_pad_id,
                      uint32_t sink_pad_id,
@@ -172,16 +195,43 @@ mp_device_setup_link(MPDevice *device,
         const struct media_v2_pad *sink_pad = mp_device_get_pad(device, sink_pad_id);
         g_return_val_if_fail(sink_pad, false);
 
-        struct media_link_desc link = {};
-        link.flags = enabled ? MEDIA_LNK_FL_ENABLED : 0;
-        link.source.entity = source_pad->entity_id;
-        link.source.index = 0;
-        link.sink.entity = sink_pad->entity_id;
-        link.sink.index = 0;
-        if (xioctl(device->fd, MEDIA_IOC_SETUP_LINK, &link) == -1) {
-                errno_printerr("MEDIA_IOC_SETUP_LINK");
+        return mp_device_setup_entity_link(
+                device, source_pad->entity_id, 0, sink_pad->entity_id, 0, enabled);
+}
+
+bool
+mp_entity_pad_set_format(MPDevice *device,
+                         const struct media_v2_entity *entity,
+                         uint32_t pad,
+                         MPMode *mode)
+{
+        const struct media_v2_interface *interface =
+                mp_device_find_entity_interface(device, entity->id);
+        char path[260];
+        if (!mp_find_device_path(interface->devnode, path, 260)) {
+                g_printerr("Could not find path to %s\n", entity->name);
                 return false;
         }
+
+        int fd = open(path, O_WRONLY);
+        if (fd == -1) {
+                errno_printerr("open");
+                return false;
+        }
+
+        struct v4l2_subdev_format fmt = {};
+        fmt.pad = pad;
+        fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+        fmt.format.width = mode->width;
+        fmt.format.height = mode->height;
+        fmt.format.code = mp_pixel_format_to_v4l_bus_code(mode->pixel_format);
+        fmt.format.field = V4L2_FIELD_ANY;
+        if (xioctl(fd, VIDIOC_SUBDEV_S_FMT, &fmt) == -1) {
+                errno_printerr("VIDIOC_SUBDEV_S_FMT");
+                return false;
+        }
+
+        close(fd);
 
         return true;
 }

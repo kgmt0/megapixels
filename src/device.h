@@ -1,5 +1,7 @@
 #pragma once
 
+#include "mode.h"
+
 #include <linux/media.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -17,10 +19,22 @@ void mp_device_close(MPDevice *device);
 
 int mp_device_get_fd(const MPDevice *device);
 
+bool mp_device_setup_entity_link(MPDevice *device,
+                                 uint32_t source_entity_id,
+                                 uint32_t sink_entity_id,
+                                 uint32_t source_index,
+                                 uint32_t sink_index,
+                                 bool enabled);
+
 bool mp_device_setup_link(MPDevice *device,
                           uint32_t source_pad_id,
                           uint32_t sink_pad_id,
                           bool enabled);
+
+bool mp_entity_pad_set_format(MPDevice *device,
+                              const struct media_v2_entity *entity,
+                              uint32_t pad,
+                              MPMode *mode);
 
 const struct media_device_info *mp_device_get_info(const MPDevice *device);
 const struct media_v2_entity *mp_device_find_entity(const MPDevice *device,
