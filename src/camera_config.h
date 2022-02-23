@@ -1,6 +1,6 @@
 #pragma once
 
-#include "camera.h"
+#include "mode.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,8 +22,8 @@ struct mp_camera_config {
         char dev_name[260];
         char media_dev_name[260];
 
-        MPCameraMode capture_mode;
-        MPCameraMode preview_mode;
+        MPMode capture_mode;
+        MPMode preview_mode;
         int rotate;
         bool mirrored;
 

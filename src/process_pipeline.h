@@ -1,12 +1,13 @@
 #pragma once
 
+#include "camera.h"
 #include "camera_config.h"
 
 typedef struct _GdkSurface GdkSurface;
 
 struct mp_process_pipeline_state {
         const struct mp_camera_config *camera;
-        MPCameraMode mode;
+        MPMode mode;
 
         int burst_length;
 

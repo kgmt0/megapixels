@@ -1,52 +1,10 @@
 #pragma once
 
-#include <linux/v4l2-subdev.h>
+#include "mode.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/wait.h>
-
-typedef enum {
-        MP_PIXEL_FMT_UNSUPPORTED,
-        MP_PIXEL_FMT_BGGR8,
-        MP_PIXEL_FMT_GBRG8,
-        MP_PIXEL_FMT_GRBG8,
-        MP_PIXEL_FMT_RGGB8,
-        MP_PIXEL_FMT_BGGR10P,
-        MP_PIXEL_FMT_GBRG10P,
-        MP_PIXEL_FMT_GRBG10P,
-        MP_PIXEL_FMT_RGGB10P,
-        MP_PIXEL_FMT_UYVY,
-        MP_PIXEL_FMT_YUYV,
-
-        MP_PIXEL_FMT_MAX,
-} MPPixelFormat;
-
-const char *mp_pixel_format_to_str(MPPixelFormat pixel_format);
-MPPixelFormat mp_pixel_format_from_str(const char *str);
-
-MPPixelFormat mp_pixel_format_from_v4l_pixel_format(uint32_t v4l_pixel_format);
-MPPixelFormat mp_pixel_format_from_v4l_bus_code(uint32_t v4l_bus_code);
-uint32_t mp_pixel_format_to_v4l_pixel_format(MPPixelFormat pixel_format);
-uint32_t mp_pixel_format_to_v4l_bus_code(MPPixelFormat pixel_format);
-
-uint32_t mp_pixel_format_bits_per_pixel(MPPixelFormat pixel_format);
-uint32_t mp_pixel_format_pixel_depth(MPPixelFormat pixel_format);
-const char *mp_pixel_format_cfa(MPPixelFormat pixel_format);
-const char *mp_pixel_format_cfa_pattern(MPPixelFormat pixel_format);
-uint32_t mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width);
-uint32_t mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width);
-uint32_t mp_pixel_format_height_to_colors(MPPixelFormat pixel_format,
-                                          uint32_t height);
-
-typedef struct {
-        MPPixelFormat pixel_format;
-
-        struct v4l2_fract frame_interval;
-        uint32_t width;
-        uint32_t height;
-} MPCameraMode;
-
-bool mp_camera_mode_is_equivalent(const MPCameraMode *m1, const MPCameraMode *m2);
 
 typedef struct {
         uint32_t index;
@@ -68,23 +26,21 @@ bool mp_camera_is_subdev(MPCamera *camera);
 int mp_camera_get_video_fd(MPCamera *camera);
 int mp_camera_get_subdev_fd(MPCamera *camera);
 
-const MPCameraMode *mp_camera_get_mode(const MPCamera *camera);
-bool mp_camera_try_mode(MPCamera *camera, MPCameraMode *mode);
+const MPMode *mp_camera_get_mode(const MPCamera *camera);
+bool mp_camera_try_mode(MPCamera *camera, MPMode *mode);
 
-bool mp_camera_set_mode(MPCamera *camera, MPCameraMode *mode);
+bool mp_camera_set_mode(MPCamera *camera, MPMode *mode);
 bool mp_camera_start_capture(MPCamera *camera);
 bool mp_camera_stop_capture(MPCamera *camera);
 bool mp_camera_is_capturing(MPCamera *camera);
 bool mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer);
 bool mp_camera_release_buffer(MPCamera *camera, uint32_t buffer_index);
 
-typedef struct _MPCameraModeList MPCameraModeList;
-
-MPCameraModeList *mp_camera_list_supported_modes(MPCamera *camera);
-MPCameraModeList *mp_camera_list_available_modes(MPCamera *camera);
-MPCameraMode *mp_camera_mode_list_get(MPCameraModeList *list);
-MPCameraModeList *mp_camera_mode_list_next(MPCameraModeList *list);
-void mp_camera_mode_list_free(MPCameraModeList *list);
+MPModeList *mp_camera_list_supported_modes(MPCamera *camera);
+MPModeList *mp_camera_list_available_modes(MPCamera *camera);
+MPMode *mp_camera_mode_list_get(MPModeList *list);
+MPModeList *mp_camera_mode_list_next(MPModeList *list);
+void mp_camera_mode_list_free(MPModeList *list);
 
 typedef struct {
         uint32_t id;

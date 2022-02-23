@@ -83,7 +83,7 @@ strtoint(const char *nptr, char **endptr, int base)
 
 static bool
 config_handle_camera_mode(const char *prefix,
-                          MPCameraMode *mode,
+                          MPMode *mode,
                           const char *name,
                           const char *value)
 {

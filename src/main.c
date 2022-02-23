@@ -36,7 +36,7 @@ enum user_control { USER_CONTROL_ISO, USER_CONTROL_SHUTTER };
 
 static bool camera_is_initialized = false;
 static const struct mp_camera_config *camera = NULL;
-static MPCameraMode mode;
+static MPMode mode;
 
 static int preview_width = -1;
 static int preview_height = -1;

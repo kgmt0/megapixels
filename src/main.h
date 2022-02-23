@@ -7,7 +7,7 @@
 
 struct mp_main_state {
         const struct mp_camera_config *camera;
-        MPCameraMode mode;
+        MPMode mode;
 
         int image_width;
         int image_height;

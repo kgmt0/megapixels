@@ -31,7 +31,7 @@ static volatile int frames_received = 0;
 static const struct mp_camera_config *camera;
 static int camera_rotation;
 
-static MPCameraMode mode;
+static MPMode mode;
 
 static int burst_length;
 static int captures_remaining = 0;
@@ -834,11 +834,10 @@ mod(int a, int b)
 static void
 update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state)
 {
-        const bool output_changed =
-                !mp_camera_mode_is_equivalent(&mode, &state->mode) ||
-                preview_width != state->preview_width ||
-                preview_height != state->preview_height ||
-                device_rotation != state->device_rotation;
+        const bool output_changed = !mp_mode_is_equivalent(&mode, &state->mode) ||
+                                    preview_width != state->preview_width ||
+                                    preview_height != state->preview_height ||
+                                    device_rotation != state->device_rotation;
 
         const bool format_changed = mode.pixel_format != state->mode.pixel_format;
 

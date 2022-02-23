@@ -1,5 +1,6 @@
 #include "camera.h"
 #include "device.h"
+#include "mode.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -143,15 +144,14 @@ main(int argc, char *argv[])
 
         double mode_list_begin = get_time();
 
-        MPCameraModeList *modes = mp_camera_list_available_modes(camera);
+        MPModeList *modes = mp_camera_list_available_modes(camera);
 
         double mode_list_end = get_time();
 
         printf("Available modes: (took %fms)\n",
                (mode_list_end - mode_list_begin) * 1000);
-        for (MPCameraModeList *list = modes; list;
-             list = mp_camera_mode_list_next(list)) {
-                MPCameraMode *m = mp_camera_mode_list_get(list);
+        for (MPModeList *list = modes; list; list = mp_camera_mode_list_next(list)) {
+                MPMode *m = mp_camera_mode_list_get(list);
                 printf("  %dx%d interval:%d/%d fmt:%s\n",
                        m->width,
                        m->height,
