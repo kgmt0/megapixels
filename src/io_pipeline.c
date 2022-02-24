@@ -102,6 +102,33 @@ static MPPipeline *pipeline;
 static GSource *capture_source;
 
 static void
+mp_setup_media_link_pad_formats(struct device_info *dev_info,
+                                const struct mp_media_link_config media_links[],
+                                int num_media_links,
+                                MPMode *mode)
+{
+        const struct media_v2_entity *entities[2];
+        int ports[2];
+        for (int i = 0; i < num_media_links; i++) {
+                entities[0] = mp_device_find_entity(
+                        dev_info->device, (const char *)media_links[i].source_name);
+                entities[1] = mp_device_find_entity(
+                        dev_info->device, (const char *)media_links[i].target_name);
+                ports[0] = media_links[i].source_port;
+                ports[1] = media_links[i].target_port;
+
+                for (int j = 0; j < 2; j++)
+                        if (!mp_entity_pad_set_format(
+                                    dev_info->device, entities[j], ports[j], mode)) {
+                                g_printerr("Failed to set %s:%d format\n",
+                                           entities[j]->name,
+                                           ports[j]);
+                                exit(EXIT_FAILURE);
+                        }
+        }
+}
+
+static void
 setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 {
         // Find device info
@@ -205,6 +232,11 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
                 // the ov5640 driver where it won't allow setting the preview
                 // format initially.
                 MPMode mode = config->capture_mode;
+                if (config->num_media_links)
+                        mp_setup_media_link_pad_formats(dev_info,
+                                                        config->media_links,
+                                                        config->num_media_links,
+                                                        &mode);
                 mp_camera_set_mode(info->camera, &mode);
 
                 // Trigger continuous auto focus if the sensor supports it
@@ -344,6 +376,7 @@ static void
 capture(MPPipeline *pipeline, const void *data)
 {
         struct camera_info *info = &cameras[camera->index];
+        struct device_info *dev_info = &devices[info->device_index];
         uint32_t gain;
         float gain_norm;
 
@@ -365,6 +398,11 @@ capture(MPPipeline *pipeline, const void *data)
         mp_camera_stop_capture(info->camera);
 
         mode = camera->capture_mode;
+        if (camera->num_media_links)
+                mp_setup_media_link_pad_formats(dev_info,
+                                                camera->media_links,
+                                                camera->num_media_links,
+                                                &mode);
         mp_camera_set_mode(info->camera, &mode);
         just_switched_mode = true;
 
@@ -508,6 +546,7 @@ on_frame(MPBuffer buffer, void *_data)
 
                 if (captures_remaining == 0) {
                         struct camera_info *info = &cameras[camera->index];
+                        struct device_info *dev_info = &devices[info->device_index];
 
                         // Restore the auto exposure and gain if needed
                         if (!current_controls.exposure_is_manual) {
@@ -527,6 +566,12 @@ on_frame(MPBuffer buffer, void *_data)
                         mp_camera_stop_capture(info->camera);
 
                         mode = camera->preview_mode;
+                        if (camera->num_media_links)
+                                mp_setup_media_link_pad_formats(
+                                        dev_info,
+                                        camera->media_links,
+                                        camera->num_media_links,
+                                        &mode);
                         mp_camera_set_mode(info->camera, &mode);
                         just_switched_mode = true;
 
@@ -540,6 +585,25 @@ on_frame(MPBuffer buffer, void *_data)
                         update_process_pipeline();
                 }
         }
+}
+
+static void
+mp_setup_media_link(struct device_info *dev_info,
+                    const struct mp_media_link_config *cfg,
+                    bool enable)
+{
+        const struct media_v2_entity *source_entity =
+                mp_device_find_entity(dev_info->device, cfg->source_name);
+
+        const struct media_v2_entity *target_entity =
+                mp_device_find_entity(dev_info->device, cfg->target_name);
+
+        mp_device_setup_entity_link(dev_info->device,
+                                    source_entity->id,
+                                    target_entity->id,
+                                    cfg->source_port,
+                                    cfg->target_port,
+                                    enable);
 }
 
 static void
@@ -562,6 +626,11 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
                                              info->pad_id,
                                              dev_info->interface_pad_id,
                                              false);
+
+                        // Disable media links
+                        for (int i = 0; i < camera->num_media_links; i++)
+                                mp_setup_media_link(
+                                        dev_info, &camera->media_links[i], false);
                 }
 
                 if (capture_source) {
@@ -580,7 +649,18 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
                                              dev_info->interface_pad_id,
                                              true);
 
+                        // Enable media links
+                        for (int i = 0; i < camera->num_media_links; i++)
+                                mp_setup_media_link(
+                                        dev_info, &camera->media_links[i], true);
+
                         mode = camera->preview_mode;
+                        if (camera->num_media_links)
+                                mp_setup_media_link_pad_formats(
+                                        dev_info,
+                                        camera->media_links,
+                                        camera->num_media_links,
+                                        &mode);
                         mp_camera_set_mode(info->camera, &mode);
 
                         mp_camera_start_capture(info->camera);
