@@ -158,7 +158,8 @@ gles2_debayer_configure(GLES2Debayer *self,
 
         if (mp_pixel_format_bits_per_pixel(self->format) == 10) {
                 assert(src_width % 4 == 0);
-                glUniform1f(self->uniform_row_length, src_width + src_width / 4);
+                glUniform1f(self->uniform_row_length,
+                            mp_pixel_format_width_to_bytes(self->format, src_width));
                 check_gl();
         }
 }

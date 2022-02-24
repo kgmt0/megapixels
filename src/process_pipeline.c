@@ -177,12 +177,12 @@ mp_process_pipeline_buffer_get_texture_id(MPProcessPipelineBuffer *buf)
 }
 
 static void
-repack_image_sequencial(const uint8_t *src_buf,
-                        uint8_t *dst_buf,
-                        size_t width,
-                        size_t height)
+repack_image_sequencial(const uint8_t *src_buf, uint8_t *dst_buf, MPMode *mode)
 {
         uint16_t pixels[4];
+
+        // Image data must be 10-bit packed
+        assert(mp_pixel_format_bits_per_pixel(mode->pixel_format) == 10);
 
         /*
          * Repack 40 bits stored in sensor format into sequencial format
@@ -190,8 +190,10 @@ repack_image_sequencial(const uint8_t *src_buf,
          * src_buf: 11111111 22222222 33333333 44444444 11223344 ...
          * dst_buf: 11111111 11222222 22223333 33333344 44444444 ...
          */
-        assert(width % 4 == 0);
-        for (size_t i = 0; i < (width + width / 4) * height; i += 5) {
+        for (size_t i = 0;
+             i < mp_pixel_format_width_to_bytes(mode->pixel_format, mode->width) *
+                         mode->height;
+             i += 5) {
                 /* Extract pixels from packed sensor format */
                 pixels[0] = (src_buf[i] << 2) | (src_buf[i + 4] >> 6);
                 pixels[1] = (src_buf[i + 1] << 2) | (src_buf[i + 4] >> 4 & 0x03);
@@ -521,8 +523,7 @@ process_image_for_capture(const uint8_t *image, int count)
                                               mode.pixel_format, mode.width) *
                                       mode.height);
 
-                repack_image_sequencial(
-                        image, output_image, mode.width, mode.height);
+                repack_image_sequencial(image, output_image, &mode);
         }
 
         for (int row = 0; row < mode.height; row++) {
