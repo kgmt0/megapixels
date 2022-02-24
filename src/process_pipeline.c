@@ -180,6 +180,11 @@ static void
 repack_image_sequencial(const uint8_t *src_buf, uint8_t *dst_buf, MPMode *mode)
 {
         uint16_t pixels[4];
+        uint32_t row_length =
+                mp_pixel_format_width_to_bytes(mode->pixel_format, mode->width);
+        uint32_t padding_bytes =
+                mp_pixel_format_width_to_padding(mode->pixel_format, mode->width);
+        size_t si = 0;
 
         // Image data must be 10-bit packed
         assert(mp_pixel_format_bits_per_pixel(mode->pixel_format) == 10);
@@ -190,15 +195,16 @@ repack_image_sequencial(const uint8_t *src_buf, uint8_t *dst_buf, MPMode *mode)
          * src_buf: 11111111 22222222 33333333 44444444 11223344 ...
          * dst_buf: 11111111 11222222 22223333 33333344 44444444 ...
          */
-        for (size_t i = 0;
-             i < mp_pixel_format_width_to_bytes(mode->pixel_format, mode->width) *
-                         mode->height;
-             i += 5) {
+        for (size_t i = 0; i < row_length * mode->height; i += 5) {
+                // Skip padding bytes in source buffer
+                if (i && i % row_length == 0)
+                        si += padding_bytes;
+
                 /* Extract pixels from packed sensor format */
-                pixels[0] = (src_buf[i] << 2) | (src_buf[i + 4] >> 6);
-                pixels[1] = (src_buf[i + 1] << 2) | (src_buf[i + 4] >> 4 & 0x03);
-                pixels[2] = (src_buf[i + 2] << 2) | (src_buf[i + 4] >> 2 & 0x03);
-                pixels[3] = (src_buf[i + 3] << 2) | (src_buf[i + 4] & 0x03);
+                pixels[0] = (src_buf[si] << 2) | (src_buf[si + 4] >> 6);
+                pixels[1] = (src_buf[si + 1] << 2) | (src_buf[si + 4] >> 4 & 0x03);
+                pixels[2] = (src_buf[si + 2] << 2) | (src_buf[si + 4] >> 2 & 0x03);
+                pixels[3] = (src_buf[si + 3] << 2) | (src_buf[si + 4] & 0x03);
 
                 /* Pack pixels into sequencial format */
                 dst_buf[i] = (pixels[0] >> 2 & 0xff);
@@ -206,6 +212,8 @@ repack_image_sequencial(const uint8_t *src_buf, uint8_t *dst_buf, MPMode *mode)
                 dst_buf[i + 2] = (pixels[1] << 4 & 0xff) | (pixels[2] >> 6 & 0x0f);
                 dst_buf[i + 3] = (pixels[2] << 2 & 0xff) | (pixels[3] >> 8 & 0x03);
                 dst_buf[i + 4] = (pixels[3] & 0xff);
+
+                si += 5;
         }
 }
 
