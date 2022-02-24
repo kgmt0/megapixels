@@ -554,8 +554,9 @@ mp_camera_capture_buffer(MPCamera *camera, MPBuffer *buffer)
                 bytesused = buf.bytesused;
         }
 
-        assert(bytesused ==
-               mp_pixel_format_width_to_bytes(pixel_format, width) * height);
+        assert(bytesused == (mp_pixel_format_width_to_bytes(pixel_format, width) +
+                             mp_pixel_format_width_to_padding(pixel_format, width)) *
+                                    height);
         assert(bytesused == camera->buffers[buf.index].length);
 
         buffer->index = buf.index;
