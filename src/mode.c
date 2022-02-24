@@ -209,6 +209,19 @@ mp_pixel_format_width_to_bytes(MPPixelFormat pixel_format, uint32_t width)
 }
 
 uint32_t
+mp_pixel_format_width_to_padding(MPPixelFormat pixel_format, uint32_t width)
+{
+        uint64_t bytes_per_width =
+                mp_pixel_format_width_to_bytes(pixel_format, width);
+
+        uint64_t remainder = bytes_per_width % 8;
+        if (remainder == 0)
+                return remainder;
+
+        return 8 - remainder;
+}
+
+uint32_t
 mp_pixel_format_width_to_colors(MPPixelFormat pixel_format, uint32_t width)
 {
         g_return_val_if_fail(pixel_format < MP_PIXEL_FMT_MAX, 0);
