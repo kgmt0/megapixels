@@ -188,7 +188,9 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
         uint8_t *data = malloc(width * height * sizeof(uint8_t));
         size_t row_length =
                 mp_pixel_format_width_to_bytes(image->pixel_format, image->width);
-        size_t i = 0;
+        int padding_bytes =
+                mp_pixel_format_width_to_padding(image->pixel_format, image->width);
+        size_t i = 0, padding_offset = 0;
         size_t offset;
         switch (image->pixel_format) {
         case MP_PIXEL_FMT_BGGR8:
@@ -220,8 +222,12 @@ process_image(MPPipeline *pipeline, MPZBarImage **_image)
                                 if (x % 4 == 0)
                                         offset += 1;
 
-                                data[i++] = image->data[x + offset + row_length * y];
+                                data[i++] = image->data[x + offset + padding_offset +
+                                                        row_length * y];
                         }
+
+                        // Skip padding
+                        padding_offset += padding_bytes * 2;
                 }
                 break;
         default:
