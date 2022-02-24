@@ -327,7 +327,9 @@ process_image_for_preview(const uint8_t *image)
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_LUMINANCE,
-                     mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width),
+                     mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) +
+                             mp_pixel_format_width_to_padding(mode.pixel_format,
+                                                              mode.width),
                      mode.height,
                      0,
                      GL_LUMINANCE,
@@ -681,8 +683,10 @@ process_image(MPPipeline *pipeline, const MPBuffer *buffer)
         clock_t t1 = clock();
 #endif
 
-        size_t size = mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) *
-                      mode.height;
+        size_t size =
+                (mp_pixel_format_width_to_bytes(mode.pixel_format, mode.width) +
+                 mp_pixel_format_width_to_padding(mode.pixel_format, mode.width)) *
+                mode.height;
         uint8_t *image = malloc(size);
         memcpy(image, buffer->data, size);
         mp_io_pipeline_release_buffer(buffer->index);

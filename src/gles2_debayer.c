@@ -14,6 +14,7 @@ struct _GLES2Debayer {
         GLuint program;
         GLuint uniform_transform;
         GLuint uniform_pixel_size;
+        GLuint uniform_padding_ratio;
         GLuint uniform_texture;
         GLuint uniform_color_matrix;
         GLuint uniform_row_length;
@@ -68,6 +69,8 @@ gles2_debayer_new(MPPixelFormat format)
 
         self->uniform_transform = glGetUniformLocation(self->program, "transform");
         self->uniform_pixel_size = glGetUniformLocation(self->program, "pixel_size");
+        self->uniform_padding_ratio =
+                glGetUniformLocation(self->program, "padding_ratio");
         self->uniform_texture = glGetUniformLocation(self->program, "texture");
         self->uniform_color_matrix =
                 glGetUniformLocation(self->program, "color_matrix");
@@ -156,12 +159,17 @@ gles2_debayer_configure(GLES2Debayer *self,
         }
         check_gl();
 
+        GLuint row_length = mp_pixel_format_width_to_bytes(self->format, src_width);
         if (mp_pixel_format_bits_per_pixel(self->format) == 10) {
                 assert(src_width % 4 == 0);
-                glUniform1f(self->uniform_row_length,
-                            mp_pixel_format_width_to_bytes(self->format, src_width));
+                glUniform1f(self->uniform_row_length, row_length);
                 check_gl();
         }
+
+        GLuint padding_bytes =
+                mp_pixel_format_width_to_padding(self->format, src_width);
+        GLfloat padding_ratio = (float)row_length / (row_length + padding_bytes);
+        glUniform1f(self->uniform_padding_ratio, padding_ratio);
 }
 
 void

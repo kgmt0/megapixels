@@ -6,6 +6,7 @@ uniform sampler2D texture;
 uniform mat3 color_matrix;
 #ifdef BITS_10
 uniform float row_length;
+uniform float padding_ratio;
 #endif
 
 varying vec2 top_left_uv;
@@ -21,6 +22,9 @@ skip_5th_pixel(vec2 uv)
 
         new_uv.x *= 0.8;
         new_uv.x += floor(uv.x * row_length / 5.0) / row_length;
+
+        // Crop out padding
+        new_uv.x *= padding_ratio;
 
         return new_uv;
 }
