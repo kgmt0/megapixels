@@ -60,6 +60,7 @@ install_data(
     'config/pine64,pinephone-1.1.ini',
     'config/pine64,pinephone-1.2.ini',
     'config/pine64,pinetab.ini',
+    'config/xiaomi,scorpio.ini',
   ],
   install_dir: get_option('datadir') / 'megapixels/config/')
 
