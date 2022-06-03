@@ -344,7 +344,7 @@ This `get_frame()` function is where the magic happens: it will call
 then call `process_image()` to process it.
 
 > NOTE: As explained at the end of the [Linux video subsystem
-> section](linux-video-subsystem), it is a bit more complex than that (that's
+> section](#linux-video-subsystem), it is a bit more complex than that (that's
 > why you will find a `ioctl()` instead of a `read()` inside `read_frame()`),
 > but for all purposes, you can ignore this fact.
 
