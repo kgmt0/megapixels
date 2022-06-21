@@ -558,15 +558,15 @@ process_image_for_capture(const uint8_t *image, int count)
                         gain - 1, 0, gain_max, camera->iso_min, camera->iso_max);
                 TIFFSetField(tif, EXIFTAG_ISOSPEEDRATINGS, 1, &isospeed);
         }
-        if(!camera->has_flash){
-            // No flash function
-            TIFFSetField(tif, EXIFTAG_FLASH, 0x20);
+        if (!camera->has_flash) {
+                // No flash function
+                TIFFSetField(tif, EXIFTAG_FLASH, 0x20);
         } else if (flash_enabled) {
-            // Flash present and fired
-            TIFFSetField(tif, EXIFTAG_FLASH, 0x1);
+                // Flash present and fired
+                TIFFSetField(tif, EXIFTAG_FLASH, 0x1);
         } else {
-            // Flash present but not fired
-            TIFFSetField(tif, EXIFTAG_FLASH, 0x0);
+                // Flash present but not fired
+                TIFFSetField(tif, EXIFTAG_FLASH, 0x0);
         }
 
         TIFFSetField(tif, EXIFTAG_DATETIMEORIGINAL, datetime);

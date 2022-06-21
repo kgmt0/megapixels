@@ -18,8 +18,10 @@ extern "C" {
 #include <stdio.h>
 
 /* Typedef for prototype of handler function. */
-typedef int (*ini_handler)(void *user, const char *section, const char *name,
-			   const char *value);
+typedef int (*ini_handler)(void *user,
+                           const char *section,
+                           const char *name,
+                           const char *value);
 
 /* Typedef for prototype of fgets-style reader function. */
 typedef char *(*ini_reader)(char *str, int num, void *stream);
@@ -45,8 +47,8 @@ int ini_parse_file(FILE *file, ini_handler handler, void *user);
 
 /* Same as ini_parse(), but takes an ini_reader function pointer instead of
    filename. Used for implementing custom or string-based I/O. */
-int ini_parse_stream(ini_reader reader, void *stream, ini_handler handler,
-		     void *user);
+int
+ini_parse_stream(ini_reader reader, void *stream, ini_handler handler, void *user);
 
 /* Nonzero to allow multi-line value parsing, in the style of Python's
    configparser. If allowed, ini_parse() will call the handler with the same
