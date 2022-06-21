@@ -79,7 +79,7 @@ executable('megapixels-camera-test',
   install: true)
 
 # Formatting
-clang_format = find_program('clang-format-12', required: false)
+clang_format = find_program('clang-format-14', required: false)
 if clang_format.found()
   format_files = [
     'data/blit.frag',

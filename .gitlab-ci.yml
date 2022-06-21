@@ -1,7 +1,7 @@
 build:debian:
   image: debian:bookworm-slim
   before_script:
-    - apt update && apt -y install gcc meson ninja-build clang-format-12 libgtk-4-dev libtiff-dev libzbar-dev
+    - apt-get update && apt-get -y install gcc meson ninja-build git clang-format-14 libgtk-4-dev libtiff-dev libzbar-dev
   script:
     - meson build
     - ninja -C build
