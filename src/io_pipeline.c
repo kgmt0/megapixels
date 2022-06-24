@@ -81,8 +81,6 @@ static int preview_height;
 
 static int device_rotation;
 
-static bool save_dng;
-
 struct control_state {
         bool gain_is_manual;
         int gain;
@@ -344,7 +342,6 @@ update_process_pipeline()
                 .camera = camera,
                 .mode = mode,
                 .burst_length = burst_length,
-                .save_dng = save_dng,
                 .preview_width = preview_width,
                 .preview_height = preview_height,
                 .device_rotation = device_rotation,
@@ -691,7 +688,6 @@ update_state(MPPipeline *pipeline, const struct mp_io_pipeline_state *state)
         preview_width = state->preview_width;
         preview_height = state->preview_height;
         device_rotation = state->device_rotation;
-        save_dng = state->save_dng;
 
         if (camera) {
                 struct control_state previous_desired = desired_controls;

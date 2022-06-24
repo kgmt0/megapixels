@@ -22,7 +22,6 @@ static const float colormatrix_srgb[] = { 3.2409, -1.5373, -0.4986, -0.9692, 1.8
 static MPPipeline *pipeline;
 
 static char burst_dir[23];
-static char processing_script[512];
 
 static volatile bool is_capturing = false;
 static volatile int frames_processed = 0;
@@ -53,9 +52,9 @@ static int exposure;
 
 static bool flash_enabled;
 
-static bool save_dng;
-
 static char capture_fname[255];
+
+static GSettings *settings;
 
 static void
 register_custom_tiff_tags(TIFF *tif)
@@ -77,8 +76,8 @@ register_custom_tiff_tags(TIFF *tif)
                            sizeof(custom_fields) / sizeof(custom_fields[0]));
 }
 
-static bool
-find_processor(char *script)
+bool
+mp_process_find_processor(char *script)
 {
         char filename[] = "postprocess.sh";
 
@@ -118,11 +117,7 @@ static void
 setup(MPPipeline *pipeline, const void *data)
 {
         TIFFSetTagExtender(register_custom_tiff_tags);
-
-        if (!find_processor(processing_script)) {
-                g_printerr("Could not find any post-process script\n");
-                exit(1);
-        }
+	settings = g_settings_new("org.postmarketos.Megapixels");
 }
 
 void
@@ -655,6 +650,9 @@ process_capture_burst(GdkTexture *thumb)
                         timestamp);
         }
 
+	bool save_dng = g_settings_get_boolean(settings, "save-raw");
+	char* postprocessor = g_settings_get_string(settings, "postprocessor");
+
         char save_dng_s[2] = "0";
         if (save_dng) {
                 save_dng_s[0] = '1';
@@ -668,7 +666,7 @@ process_capture_burst(GdkTexture *thumb)
         g_autoptr(GError) error = NULL;
         GSubprocess *proc = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE,
                                              &error,
-                                             processing_script,
+                                             postprocessor,
                                              burst_dir,
                                              capture_fname,
                                              save_dng_s,
@@ -863,7 +861,6 @@ update_state(MPPipeline *pipeline, const struct mp_process_pipeline_state *state
         device_rotation = state->device_rotation;
 
         burst_length = state->burst_length;
-        save_dng = state->save_dng;
 
         // gain_is_manual = state->gain_is_manual;
         gain = state->gain;

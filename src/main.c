@@ -55,8 +55,6 @@ static bool has_auto_focus_start;
 
 static bool flash_enabled = false;
 
-static bool setting_save_dng;
-
 static MPProcessPipelineBuffer *current_preview_buffer = NULL;
 static int preview_buffer_width = -1;
 static int preview_buffer_height = -1;
@@ -110,7 +108,6 @@ update_io_pipeline()
                 .gain = gain,
                 .exposure_is_manual = exposure_is_manual,
                 .exposure = exposure,
-                .save_dng = setting_save_dng,
                 .flash_enabled = flash_enabled,
         };
         mp_io_pipeline_update_state(&io_state);
@@ -701,14 +698,6 @@ static void
 run_close_settings_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
         gtk_stack_set_visible_child_name(GTK_STACK(main_stack), "main");
-
-        // Update settings
-        bool save_dng = g_settings_get_boolean(settings, "save-raw");
-
-        if (save_dng != setting_save_dng) {
-                setting_save_dng = save_dng;
-                update_io_pipeline();
-        }
 }
 
 static void
@@ -1061,13 +1050,26 @@ activate(GtkApplication *app, gpointer data)
 
         // Setup settings
         settings = g_settings_new("org.postmarketos.Megapixels");
+	char* setting_postproc = g_settings_get_string(settings, "postprocessor");
+
+	// Initialize the postprocessing gsetting to the old processor if
+	// it was not set yet
+	if(setting_postproc == NULL || setting_postproc[0] == '\0') {
+		printf("Initializing postprocessor gsetting\n");
+		setting_postproc = malloc(512);
+		if(!mp_process_find_processor(setting_postproc)) {
+			printf("No processor found\n");
+			exit(1);
+		}
+		g_settings_set_string(settings, "postprocessor", setting_postproc);
+		printf("Initialized postprocessor to %s\n", setting_postproc);
+	}
         g_settings_bind(settings,
                         "save-raw",
                         setting_dng_button,
                         "active",
                         G_SETTINGS_BIND_DEFAULT);
 
-        setting_save_dng = g_settings_get_boolean(settings, "save-raw");
 
         // Listen for phosh rotation
         GDBusConnection *conn =

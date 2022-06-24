@@ -11,5 +11,14 @@
         up after processing.
       </description>
     </key>
+    <key name="postprocessor" type='s'>
+      <default>''</default>
+      <summary>Path to the postprocessor script</summary>
+      <description>
+        When set this will define the absolute path to a postprocessor to use after
+        taking a picture. When empty megapixels will default to the legacy
+        postprocess.sh lookup
+      </description>
+    </key>
   </schema>
 </schemalist>

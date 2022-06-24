@@ -27,9 +27,9 @@ struct mp_process_pipeline_state {
         bool has_auto_focus_start;
 
         bool flash_enabled;
-
-        bool save_dng;
 };
+
+bool mp_process_find_processor(char *script);
 
 void mp_process_pipeline_start();
 void mp_process_pipeline_stop();
