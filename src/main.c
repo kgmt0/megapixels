@@ -1001,6 +1001,10 @@ activate(GtkApplication *app, gpointer data)
                 GTK_WIDGET(gtk_builder_get_object(builder, "flash-controls-button"));
         GtkWidget *setting_dng_button =
                 GTK_WIDGET(gtk_builder_get_object(builder, "setting-raw"));
+        GtkWidget *setting_postprocessor_combo =
+                GTK_WIDGET(gtk_builder_get_object(builder, "setting-processor"));
+        GtkListStore *setting_postprocessor_list = GTK_LIST_STORE(
+                gtk_builder_get_object(builder, "list-postprocessors"));
         preview = GTK_WIDGET(gtk_builder_get_object(builder, "preview"));
         main_stack = GTK_WIDGET(gtk_builder_get_object(builder, "main_stack"));
         open_last_stack =
@@ -1050,26 +1054,35 @@ activate(GtkApplication *app, gpointer data)
 
         // Setup settings
         settings = g_settings_new("org.postmarketos.Megapixels");
-	char* setting_postproc = g_settings_get_string(settings, "postprocessor");
+        char *setting_postproc = g_settings_get_string(settings, "postprocessor");
 
-	// Initialize the postprocessing gsetting to the old processor if
-	// it was not set yet
-	if(setting_postproc == NULL || setting_postproc[0] == '\0') {
-		printf("Initializing postprocessor gsetting\n");
-		setting_postproc = malloc(512);
-		if(!mp_process_find_processor(setting_postproc)) {
-			printf("No processor found\n");
-			exit(1);
-		}
-		g_settings_set_string(settings, "postprocessor", setting_postproc);
-		printf("Initialized postprocessor to %s\n", setting_postproc);
-	}
+        // Initialize the postprocessing gsetting to the old processor if
+        // it was not set yet
+        if (setting_postproc == NULL || setting_postproc[0] == '\0') {
+                printf("Initializing postprocessor gsetting\n");
+                setting_postproc = malloc(512);
+                if (!mp_process_find_processor(setting_postproc)) {
+                        printf("No processor found\n");
+                        exit(1);
+                }
+                g_settings_set_string(settings, "postprocessor", setting_postproc);
+                printf("Initialized postprocessor to %s\n", setting_postproc);
+        }
+
+        // Find all postprocessors for the settings list
+        mp_process_find_all_processors(setting_postprocessor_list);
+
+        // Bind settings widgets to the actual settings
         g_settings_bind(settings,
                         "save-raw",
                         setting_dng_button,
                         "active",
                         G_SETTINGS_BIND_DEFAULT);
-
+        g_settings_bind(settings,
+                        "postprocessor",
+                        setting_postprocessor_combo,
+                        "active-id",
+                        G_SETTINGS_BIND_DEFAULT);
 
         // Listen for phosh rotation
         GDBusConnection *conn =

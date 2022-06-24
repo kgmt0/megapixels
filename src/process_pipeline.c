@@ -76,6 +76,73 @@ register_custom_tiff_tags(TIFF *tif)
                            sizeof(custom_fields) / sizeof(custom_fields[0]));
 }
 
+void
+mp_process_find_all_processors(GtkListStore *store)
+{
+        GtkTreeIter iter;
+        char buffer[512];
+        // Find all the original postprocess.sh locations
+
+        // Check postprocess.sh in the current working directory
+        if (access("./data/postprocess.sh", F_OK) != -1) {
+                gtk_list_store_insert(store, &iter, -1);
+                gtk_list_store_set(store,
+                                   &iter,
+                                   0,
+                                   "./data/postprocess.sh",
+                                   1,
+                                   "(cwd) postprocess.sh",
+                                   -1);
+        }
+
+        // Check for a script in XDG_CONFIG_HOME
+        sprintf(buffer, "%s/megapixels/postprocess.sh", g_get_user_config_dir());
+        if (access(buffer, F_OK) != -1) {
+                gtk_list_store_insert(store, &iter, -1);
+                gtk_list_store_set(
+                        store, &iter, 0, buffer, 1, "(user) postprocess.sh", -1);
+        }
+
+        // Check user overridden /etc/megapixels/postprocessor.sh
+        sprintf(buffer, "%s/megapixels/postprocess.sh", SYSCONFDIR);
+        if (access(buffer, F_OK) != -1) {
+                gtk_list_store_insert(store, &iter, -1);
+                gtk_list_store_set(
+                        store, &iter, 0, buffer, 1, "(system) postprocess.sh", -1);
+        }
+
+        // Check user overridden /usr/share/megapixels/postprocessor.sh
+        sprintf(buffer, "%s/megapixels/postprocess.sh", DATADIR);
+        if (access(buffer, F_OK) != -1) {
+                gtk_list_store_insert(store, &iter, -1);
+                gtk_list_store_set(
+                        store, &iter, 0, buffer, 1, "(built-in) postprocess.sh", -1);
+        }
+
+        // Find extra packaged postprocessor scripts
+        // These should be packaged in
+        // /usr/share/megapixels/postprocessor.d/executable
+        sprintf(buffer, "%s/megapixels/postprocessor.d", DATADIR);
+        DIR *d;
+        struct dirent *dir;
+        d = opendir(buffer);
+        if (d) {
+                while ((dir = readdir(d)) != NULL) {
+                        if (dir->d_name[0] == '.') {
+                                continue;
+                        }
+                        sprintf(buffer,
+                                "%s/megapixels/postprocessor.d/%s",
+                                DATADIR,
+                                dir->d_name);
+                        gtk_list_store_insert(store, &iter, -1);
+                        gtk_list_store_set(
+                                store, &iter, 0, buffer, 1, dir->d_name, -1);
+                }
+                closedir(d);
+        }
+}
+
 bool
 mp_process_find_processor(char *script)
 {
@@ -117,7 +184,7 @@ static void
 setup(MPPipeline *pipeline, const void *data)
 {
         TIFFSetTagExtender(register_custom_tiff_tags);
-	settings = g_settings_new("org.postmarketos.Megapixels");
+        settings = g_settings_new("org.postmarketos.Megapixels");
 }
 
 void
@@ -650,8 +717,8 @@ process_capture_burst(GdkTexture *thumb)
                         timestamp);
         }
 
-	bool save_dng = g_settings_get_boolean(settings, "save-raw");
-	char* postprocessor = g_settings_get_string(settings, "postprocessor");
+        bool save_dng = g_settings_get_boolean(settings, "save-raw");
+        char *postprocessor = g_settings_get_string(settings, "postprocessor");
 
         char save_dng_s[2] = "0";
         if (save_dng) {

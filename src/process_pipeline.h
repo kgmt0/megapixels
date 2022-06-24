@@ -2,6 +2,7 @@
 
 #include "camera.h"
 #include "camera_config.h"
+#include <gtk/gtk.h>
 
 typedef struct _GdkSurface GdkSurface;
 
@@ -30,6 +31,7 @@ struct mp_process_pipeline_state {
 };
 
 bool mp_process_find_processor(char *script);
+void mp_process_find_all_processors(GtkListStore *store);
 
 void mp_process_pipeline_start();
 void mp_process_pipeline_stop();
