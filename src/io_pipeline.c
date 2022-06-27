@@ -389,6 +389,7 @@ capture(MPPipeline *pipeline, const void *data)
         gain = mp_camera_control_get_int32(info->camera, V4L2_CID_GAIN);
         gain_norm = (float)gain / (float)info->gain_max;
         burst_length = (int)(sqrt(gain_norm) * 10) + 1;
+        captures_remaining = burst_length;
 
         // Change camera mode for capturing
         mp_process_pipeline_sync();
