@@ -26,6 +26,15 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.5.1" date="2022-06-27">
+			<description>
+				<p>
+					<li>Fix the screen flash for the front camera</li>
+					<li>Fix the preview speed dropping after taking a picture</li>
+					<li>Updated the version number</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.5.0" date="2022-06-26">
 			<description>
 				<p>
