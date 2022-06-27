@@ -575,7 +575,7 @@ on_frame(MPBuffer buffer, void *_data)
                         mp_camera_start_capture(info->camera);
 
                         // Disable flash
-                        if (info->flash) {
+                        if (info->flash && flash_enabled) {
                                 mp_flash_disable(info->flash);
                         }
 
