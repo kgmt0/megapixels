@@ -26,6 +26,14 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.5.2" date="2022-06-29">
+			<description>
+				<p>
+					<li>Clamp the minimum burst length to 2 to keep compatability
+					with existing postprocessing scripts</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.5.1" date="2022-06-27">
 			<description>
 				<p>

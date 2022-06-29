@@ -1,4 +1,4 @@
-project('megapixels', 'c', version: '1.5.1')
+project('megapixels', 'c', version: '1.5.2')
 
 gnome = import('gnome')
 gtkdep = dependency('gtk4')
