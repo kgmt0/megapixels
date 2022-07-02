@@ -197,7 +197,7 @@ mp_device_setup_link(MPDevice *device,
         g_return_val_if_fail(sink_pad, false);
 
         return mp_device_setup_entity_link(
-                device, source_pad->entity_id, sink_pad->entity_id, 0, 0, enabled);
+                device, source_pad->entity_id, sink_pad->entity_id, source_pad->index, sink_pad->index, enabled);
 }
 
 bool
