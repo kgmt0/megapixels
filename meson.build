@@ -9,6 +9,18 @@ threads = dependency('threads')
 # gl = dependency('gl')
 epoxy      = dependency('epoxy')
 
+# We only build in support for Wayland/X11 if GTK did so
+optdeps = []
+if gtkdep.get_variable('targets').contains('wayland')
+  optdeps += dependency('gtk4-wayland')
+  optdeps += dependency('wayland-client')
+endif
+if gtkdep.get_variable('targets').contains('x11')
+  optdeps += dependency('gtk4-x11')
+  optdeps += dependency('x11')
+  optdeps += dependency('xrandr')
+endif
+
 cc = meson.get_compiler('c')
 libm = cc.find_library('m', required: false)
 
@@ -51,7 +63,7 @@ executable('megapixels',
   'src/zbar_pipeline.c',
   resources,
   include_directories: 'src/',
-  dependencies: [gtkdep, libfeedback, libm, tiff, zbar, threads, epoxy],
+  dependencies: [gtkdep, libfeedback, libm, tiff, zbar, threads, epoxy] + optdeps,
   install: true,
   link_args: '-Wl,-ldl')
 

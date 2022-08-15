@@ -12,6 +12,15 @@
 #include <gtk/gtk.h>
 #define LIBFEEDBACK_USE_UNSTABLE_API
 #include <libfeedback.h>
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/wayland/gdkwayland.h>
+#include <wayland-client.h>
+#endif
+#ifdef GDK_WINDOWING_X11
+#include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+#include <gdk/x11/gdkx.h>
+#endif
 #include <limits.h>
 #include <linux/kdev_t.h>
 #include <linux/media.h>
@@ -918,66 +927,6 @@ update_ui_rotation()
         }
 }
 
-static void
-display_config_received(GDBusConnection *conn, GAsyncResult *res, gpointer user_data)
-{
-        g_autoptr(GError) error = NULL;
-        g_autoptr(GVariant) result =
-                g_dbus_connection_call_finish(conn, res, &error);
-
-        if (!result) {
-                printf("Failed to get display configuration: %s\n", error->message);
-                return;
-        }
-
-        g_autoptr(GVariant) configs = g_variant_get_child_value(result, 1);
-        if (g_variant_n_children(configs) == 0) {
-                return;
-        }
-
-        g_autoptr(GVariant) config = g_variant_get_child_value(configs, 0);
-        g_autoptr(GVariant) rot_config = g_variant_get_child_value(config, 7);
-        uint32_t rotation_index = g_variant_get_uint32(rot_config);
-
-        assert(rotation_index < 4);
-        int new_rotation = rotation_index * 90;
-
-        if (new_rotation != device_rotation) {
-                device_rotation = new_rotation;
-                update_io_pipeline();
-                update_ui_rotation();
-        }
-}
-
-static void
-update_screen_rotation(GDBusConnection *conn)
-{
-        g_dbus_connection_call(conn,
-                               "org.gnome.Mutter.DisplayConfig",
-                               "/org/gnome/Mutter/DisplayConfig",
-                               "org.gnome.Mutter.DisplayConfig",
-                               "GetResources",
-                               NULL,
-                               NULL,
-                               G_DBUS_CALL_FLAGS_NO_AUTO_START,
-                               -1,
-                               NULL,
-                               (GAsyncReadyCallback)display_config_received,
-                               NULL);
-}
-
-static void
-on_screen_rotate(GDBusConnection *conn,
-                 const gchar *sender_name,
-                 const gchar *object_path,
-                 const gchar *interface_name,
-                 const gchar *signal_name,
-                 GVariant *parameters,
-                 gpointer user_data)
-{
-        update_screen_rotation(conn);
-}
-
 char *
 munge_app_id(const char *app_id)
 {
@@ -1067,6 +1016,109 @@ setup_fb_switch(GtkBuilder *builder)
                                      NULL,
                                      NULL);
 }
+
+#ifdef GDK_WINDOWING_WAYLAND
+static void
+wl_handle_geometry(void *data,
+                   struct wl_output *wl_output,
+                   int32_t x,
+                   int32_t y,
+                   int32_t physical_width,
+                   int32_t physical_height,
+                   int32_t subpixel,
+                   const char *make,
+                   const char *model,
+                   int32_t transform)
+{
+        assert(transform < 4);
+        int new_rotation = transform * 90;
+
+        if (new_rotation != device_rotation) {
+                device_rotation = new_rotation;
+                update_io_pipeline();
+                update_ui_rotation();
+        }
+}
+
+static void
+wl_handle_mode(void *data,
+               struct wl_output *wl_output,
+               uint32_t flags,
+               int32_t width,
+               int32_t height,
+               int32_t refresh)
+{
+        // Do nothing
+}
+
+static const struct wl_output_listener output_listener = {
+        .geometry = wl_handle_geometry,
+        .mode = wl_handle_mode
+};
+
+static void
+wl_handle_global(void *data,
+                 struct wl_registry *wl_registry,
+                 uint32_t name,
+                 const char *interface,
+                 uint32_t version)
+{
+        if (strcmp(interface, wl_output_interface.name) == 0) {
+                struct wl_output *output =
+                        wl_registry_bind(wl_registry, name, &wl_output_interface, 1);
+                wl_output_add_listener(output, &output_listener, NULL);
+        }
+}
+
+static void
+wl_handle_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name)
+{
+        // Do nothing
+}
+
+static const struct wl_registry_listener registry_listener = {
+        .global = wl_handle_global,
+        .global_remove = wl_handle_global_remove
+};
+#endif // GDK_WINDOWING_WAYLAND
+
+#ifdef GDK_WINDOWING_X11
+static gboolean
+xevent_handler(GdkDisplay *display, XEvent *xevent, gpointer data)
+{
+        Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+        int event_base, error_base;
+        XRRQueryExtension(xdisplay, &event_base, &error_base);
+        if (xevent->type - event_base == RRScreenChangeNotify) {
+                Rotation xrotation =
+                        ((XRRScreenChangeNotifyEvent *)xevent)->rotation;
+                int new_rotation = 0;
+                switch (xrotation) {
+                case RR_Rotate_0:
+                        new_rotation = 0;
+                        break;
+                case RR_Rotate_90:
+                        new_rotation = 90;
+                        break;
+                case RR_Rotate_180:
+                        new_rotation = 180;
+                        break;
+                case RR_Rotate_270:
+                        new_rotation = 270;
+                        break;
+                }
+                if (new_rotation != device_rotation) {
+                        device_rotation = new_rotation;
+                        update_io_pipeline();
+                        update_ui_rotation();
+                }
+        }
+
+        // The return value of this function should always be FALSE; if it's
+        // TRUE, we prevent GTK/GDK from handling the event.
+        return FALSE;
+}
+#endif // GDK_WINDOWING_X11
 
 static void
 activate(GtkApplication *app, gpointer data)
@@ -1184,22 +1236,58 @@ activate(GtkApplication *app, gpointer data)
                         "active-id",
                         G_SETTINGS_BIND_DEFAULT);
 
-        // Listen for phosh rotation
-        GDBusConnection *conn =
-                g_application_get_dbus_connection(G_APPLICATION(app));
-        g_dbus_connection_signal_subscribe(conn,
-                                           NULL,
-                                           "org.gnome.Mutter.DisplayConfig",
-                                           "MonitorsChanged",
-                                           "/org/gnome/Mutter/DisplayConfig",
-                                           NULL,
-                                           G_DBUS_SIGNAL_FLAGS_NONE,
-                                           &on_screen_rotate,
-                                           NULL,
-                                           NULL);
-        update_screen_rotation(conn);
+#ifdef GDK_WINDOWING_WAYLAND
+        // Listen for Wayland rotation
+        if (GDK_IS_WAYLAND_DISPLAY(display)) {
+                struct wl_display *wl_display =
+                        gdk_wayland_display_get_wl_display(display);
+                struct wl_registry *wl_registry =
+                        wl_display_get_registry(wl_display);
+                // The registry listener will bind to our wl_output and add our
+                // listeners
+                wl_registry_add_listener(wl_registry, &registry_listener, NULL);
+                // GTK will take care of dispatching wayland events for us.
+                // Wayland sends us a geometry event as soon as we bind to the
+                // wl_output, so we don't need to manually check the initial
+                // rotation here.
+        }
+#endif
+#ifdef GDK_WINDOWING_X11
+        // Listen for X rotation
+        if (GDK_IS_X11_DISPLAY(display)) {
+                g_signal_connect(
+                        display, "xevent", G_CALLBACK(xevent_handler), NULL);
+                // Set initial rotation
+                Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+                int screen =
+                        XScreenNumberOfScreen(gdk_x11_display_get_xscreen(display));
+                Rotation xrotation;
+                XRRRotations(xdisplay, screen, &xrotation);
+                int new_rotation = 0;
+                switch (xrotation) {
+                case RR_Rotate_0:
+                        new_rotation = 0;
+                        break;
+                case RR_Rotate_90:
+                        new_rotation = 90;
+                        break;
+                case RR_Rotate_180:
+                        new_rotation = 180;
+                        break;
+                case RR_Rotate_270:
+                        new_rotation = 270;
+                        break;
+                }
+                if (new_rotation != device_rotation) {
+                        device_rotation = new_rotation;
+                        update_ui_rotation();
+                }
+        }
+#endif
 
         // Initialize display flash
+        GDBusConnection *conn =
+                g_application_get_dbus_connection(G_APPLICATION(app));
         mp_flash_gtk_init(conn);
 
         mp_io_pipeline_start();
