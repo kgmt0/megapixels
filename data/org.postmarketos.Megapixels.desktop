@@ -6,4 +6,5 @@ Type=Application
 Categories=GTK;Photography;Graphics;
 Icon=org.postmarketos.Megapixels
 X-Purism-FormFactor=Workstation;Mobile;
+X-Phosh-UsesFeedback=true
 StartupNotify=true
