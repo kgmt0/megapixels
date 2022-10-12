@@ -2,6 +2,7 @@ project('megapixels', 'c', version: '1.5.2')
 
 gnome = import('gnome')
 gtkdep = dependency('gtk4')
+libfeedback = dependency('libfeedback-0.0')
 tiff = dependency('libtiff-4')
 zbar = dependency('zbar')
 threads = dependency('threads')
@@ -50,7 +51,7 @@ executable('megapixels',
   'src/zbar_pipeline.c',
   resources,
   include_directories: 'src/',
-  dependencies: [gtkdep, libm, tiff, zbar, threads, epoxy],
+  dependencies: [gtkdep, libfeedback, libm, tiff, zbar, threads, epoxy],
   install: true,
   link_args: '-Wl,-ldl')
 

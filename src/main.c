@@ -10,6 +10,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <gtk/gtk.h>
+#define LIBFEEDBACK_USE_UNSTABLE_API
+#include <libfeedback.h>
 #include <limits.h>
 #include <linux/kdev_t.h>
 #include <linux/media.h>
@@ -31,6 +33,8 @@
 #include <renderdoc/app.h>
 RENDERDOC_API_1_1_2 *rdoc_api = NULL;
 #endif
+
+#define APP_ID "org.postmarketos.Megapixels"
 
 enum user_control { USER_CONTROL_ISO, USER_CONTROL_SHUTTER };
 
@@ -75,6 +79,7 @@ GtkWidget *scanned_codes;
 GtkWidget *preview_top_box;
 GtkWidget *preview_bottom_box;
 GtkWidget *flash_button;
+LfbEvent *capture_event;
 
 GSettings *settings;
 
@@ -516,6 +521,9 @@ run_capture_action(GSimpleAction *action, GVariant *param, gpointer user_data)
 {
         gtk_spinner_start(GTK_SPINNER(process_spinner));
         gtk_stack_set_visible_child(GTK_STACK(open_last_stack), process_spinner);
+        if (capture_event)
+                lfb_event_trigger_feedback_async(capture_event, NULL, NULL, NULL);
+
         mp_io_pipeline_capture();
 }
 
@@ -976,7 +984,6 @@ activate(GtkApplication *app, gpointer data)
                      "gtk-application-prefer-dark-theme",
                      TRUE,
                      NULL);
-
         GdkDisplay *display = gdk_display_get_default();
         GtkIconTheme *icon_theme = gtk_icon_theme_get_for_display(display);
         gtk_icon_theme_add_resource_path(icon_theme, "/org/postmarketos/Megapixels");
@@ -1109,12 +1116,26 @@ activate(GtkApplication *app, gpointer data)
 }
 
 static void
+startup(GApplication *app, gpointer data)
+{
+        g_autoptr(GError) err = NULL;
+
+        if (lfb_init(APP_ID, &err))
+                capture_event = lfb_event_new("camera-shutter");
+        else
+                g_warning("Failed to init libfeedback: %s", err->message);
+}
+
+static void
 shutdown(GApplication *app, gpointer data)
 {
         // Only do cleanup in development, let the OS clean up otherwise
 #ifdef DEBUG
         mp_io_pipeline_stop();
         mp_flash_gtk_clean();
+
+        g_clear_object(&capture_event);
+        lfb_uninit();
 #endif
 }
 
@@ -1141,8 +1162,9 @@ main(int argc, char *argv[])
 
         setenv("LC_NUMERIC", "C", 1);
 
-        GtkApplication *app = gtk_application_new("org.postmarketos.Megapixels", 0);
+        GtkApplication *app = gtk_application_new(APP_ID, 0);
 
+        g_signal_connect(app, "startup", G_CALLBACK(startup), NULL);
         g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
         g_signal_connect(app, "shutdown", G_CALLBACK(shutdown), NULL);
 
