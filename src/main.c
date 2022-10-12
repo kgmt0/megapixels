@@ -373,9 +373,9 @@ preview_draw(GtkGLArea *area, GdkGLContext *ctx, gpointer data)
                 GLfloat cos_rot = rotation_list[(4 + rotation_index - 1) % 4];
                 GLfloat matrix[9] = {
                         // clang-format off
-			cos_rot,  sin_rot, 0,
-			-sin_rot, cos_rot, 0,
-			0,              0, 1,
+                        cos_rot,  sin_rot, 0,
+                        -sin_rot, cos_rot, 0,
+                        0,              0, 1,
                         // clang-format on
                 };
                 glUniformMatrix3fv(blit_uniform_transform, 1, GL_FALSE, matrix);
