@@ -82,6 +82,7 @@ GtkWidget *flash_button;
 LfbEvent *capture_event;
 
 GSettings *settings;
+GSettings *fb_settings;
 
 int
 remap(int value, int input_min, int input_max, int output_min, int output_max)
@@ -977,6 +978,96 @@ on_screen_rotate(GDBusConnection *conn,
         update_screen_rotation(conn);
 }
 
+char *
+munge_app_id(const char *app_id)
+{
+        char *id = g_strdup(app_id);
+        int i;
+
+        if (g_str_has_suffix(id, ".desktop")) {
+                char *c = g_strrstr(id, ".desktop");
+                if (c)
+                        *c = '\0';
+        }
+
+        g_strcanon(id,
+                   "0123456789"
+                   "abcdefghijklmnopqrstuvwxyz"
+                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                   "-",
+                   '-');
+        for (i = 0; id[i] != '\0'; i++)
+                id[i] = g_ascii_tolower(id[i]);
+
+        return id;
+}
+
+/* Verbatim from feedbackd */
+#define FEEDBACKD_SCHEMA_ID "org.sigxcpu.feedbackd"
+#define FEEDBACKD_KEY_PROFILE "profile"
+#define FEEDBACKD_APP_SCHEMA FEEDBACKD_SCHEMA_ID ".application"
+#define FEEDBACKD_APP_PREFIX "/org/sigxcpu/feedbackd/application/"
+
+static gboolean
+fb_profile_to_state(GValue *value, GVariant *variant, gpointer user_data)
+{
+        const gchar *name;
+        gboolean state = FALSE;
+
+        name = g_variant_get_string(variant, NULL);
+
+        if (g_strcmp0(name, "full") == 0)
+                state = TRUE;
+
+        g_value_set_boolean(value, state);
+
+        return TRUE;
+}
+
+static GVariant *
+state_to_fb_profile(const GValue *value,
+                    const GVariantType *expected_type,
+                    gpointer user_data)
+{
+        gboolean state = g_value_get_boolean(value);
+
+        return g_variant_new_string(state ? "full" : "silent");
+}
+
+static void
+setup_fb_switch(GtkBuilder *builder)
+{
+        g_autofree char *path = NULL;
+        g_autofree char *munged_id = NULL;
+        g_autoptr(GSettingsSchema) schema = NULL;
+        GSettingsSchemaSource *schema_source =
+                g_settings_schema_source_get_default();
+        GtkWidget *shutter_sound_switch =
+                GTK_WIDGET(gtk_builder_get_object(builder, "shutter-sound-switch"));
+        GtkWidget *feedback_box =
+                GTK_WIDGET(gtk_builder_get_object(builder, "feedback-box"));
+
+        schema = g_settings_schema_source_lookup(
+                schema_source, FEEDBACKD_APP_SCHEMA, TRUE);
+        if (schema == NULL) {
+                gtk_widget_set_sensitive(feedback_box, FALSE);
+                return;
+        }
+
+        munged_id = munge_app_id(APP_ID);
+        path = g_strconcat(FEEDBACKD_APP_PREFIX, munged_id, "/", NULL);
+        fb_settings = g_settings_new_with_path(FEEDBACKD_APP_SCHEMA, path);
+        g_settings_bind_with_mapping(fb_settings,
+                                     FEEDBACKD_KEY_PROFILE,
+                                     shutter_sound_switch,
+                                     "active",
+                                     G_SETTINGS_BIND_DEFAULT,
+                                     fb_profile_to_state,
+                                     state_to_fb_profile,
+                                     NULL,
+                                     NULL);
+}
+
 static void
 activate(GtkApplication *app, gpointer data)
 {
@@ -1038,6 +1129,8 @@ activate(GtkApplication *app, gpointer data)
                 shutter_button, "clicked", G_CALLBACK(open_shutter_controls), NULL);
         g_signal_connect(
                 flash_button, "clicked", G_CALLBACK(flash_button_clicked), NULL);
+
+        setup_fb_switch(builder);
 
         // Setup actions
         create_simple_action(app, "capture", G_CALLBACK(run_capture_action));
@@ -1134,6 +1227,7 @@ shutdown(GApplication *app, gpointer data)
         mp_io_pipeline_stop();
         mp_flash_gtk_clean();
 
+        g_clear_object(&fb_settings);
         g_clear_object(&capture_event);
         lfb_uninit();
 #endif

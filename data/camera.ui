@@ -282,6 +282,37 @@
                             <property name="label">Save raw files</property>
                           </object>
                         </child>
+
+                        <child>
+                          <object class="GtkBox" id="feedback-box">
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="halign">start</property>
+                                <property name="label">Feedback</property>
+                                <style>
+                                  <class name="heading"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox" id="shutter-sound-box">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Shutter sound</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSwitch" id="shutter-sound-switch">
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
                       </object>
                     </property>
                   </object>
