@@ -258,6 +258,9 @@
                             <property name="visible">True</property>
                             <property name="halign">start</property>
                             <property name="label">Postprocessor</property>
+                            <style>
+                              <class name="heading"/>
+                            </style>
                           </object>
                         </child>
                         <child>
