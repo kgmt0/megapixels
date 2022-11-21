@@ -277,18 +277,16 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 static void
 setup(MPPipeline *pipeline, const void *data)
 {
-        MPDeviceList *device_list = mp_device_list_new();
-
         for (size_t i = 0; i < MP_MAX_CAMERAS; ++i) {
                 const struct mp_camera_config *config = mp_get_camera_config(i);
                 if (!config) {
                         break;
                 }
 
+                MPDeviceList *device_list = mp_device_list_new();
                 setup_camera(&device_list, config);
+                mp_device_list_free(device_list);
         }
-
-        mp_device_list_free(device_list);
 }
 
 static void
