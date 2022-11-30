@@ -26,6 +26,15 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.6.0" date="2022-11-30">
+			<description>
+				<p>
+					<li>Integrate with feedbackd for shutter sounds</li>
+					<li>Get screen rotation from wayland and xorg instead of dbus</li>
+                    <li>Cleanups in media device lookup</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.5.2" date="2022-06-29">
 			<description>
 				<p>
@@ -236,7 +245,7 @@
 				</ul>
 			</description>
 		</release>
-		
+
 		<release version="0.8.0" date="2020-09-21">
 			<description>
 				<p>First distro-packaged release of Megapixels</p>
