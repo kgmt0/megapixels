@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mode.h"
+#include "camera_config.h"
 
 #include <linux/media.h>
 #include <stdbool.h>
@@ -26,6 +27,10 @@ bool mp_device_setup_entity_link(MPDevice *device,
                                  uint32_t sink_index,
                                  bool enabled);
 
+void mp_device_setup_media_link(MPDevice *device,
+                                const struct mp_media_link_config *cfg,
+                                bool enable);
+
 bool mp_device_setup_link(MPDevice *device,
                           uint32_t source_pad_id,
                           uint32_t sink_pad_id,
@@ -35,6 +40,15 @@ bool mp_entity_pad_set_format(MPDevice *device,
                               const struct media_v2_entity *entity,
                               uint32_t pad,
                               MPMode *mode);
+
+bool mp_xioctl(const MPDevice *device, const char *driver_name, unsigned long request, void *argp);
+
+bool mp_device_setup_link_by_name(MPDevice *device,
+                                  const char *source_entity_name,
+                                  uint32_t source_pad_index,
+                                  const char *sink_entity_name,
+                                  uint32_t sink_pad_index,
+                                  bool enabled);
 
 const struct media_device_info *mp_device_get_info(const MPDevice *device);
 const struct media_v2_entity *mp_device_find_entity(const MPDevice *device,

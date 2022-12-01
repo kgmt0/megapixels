@@ -305,8 +305,12 @@ mp_camera_set_mode(MPCamera *camera, MPMode *mode)
                 }
 
                 // Update the mode
-                mode->pixel_format =
-                        mp_pixel_format_from_v4l_bus_code(fmt.format.code);
+
+                // TODO: Some how the format gets changed to YUYV if this isn't
+                // commented out.
+                //mode->pixel_format =
+                //        mp_pixel_format_from_v4l_bus_code(fmt.format.code);
+
                 mode->frame_interval = interval.interval;
                 mode->width = fmt.format.width;
                 mode->height = fmt.format.height;
