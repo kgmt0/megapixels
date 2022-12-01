@@ -8,6 +8,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <linux/v4l2-subdev.h>
+#include <linux/media.h>
 
 bool
 mp_find_device_path(struct media_v2_intf_devnode devnode, char *path, int length)
@@ -71,6 +73,46 @@ xioctl(int fd, int request, void *arg)
                 r = ioctl(fd, request, arg);
         } while (r == -1 && errno == EINTR);
         return r;
+}
+
+static int
+mp_device_get_fd_by_name(const MPDevice *device, const char *driver_name)
+{
+        struct media_entity_desc desc = {};
+
+        desc.id |= MEDIA_ENT_ID_FLAG_NEXT;
+
+        while(true) {
+                desc.id |= MEDIA_ENT_ID_FLAG_NEXT;
+                if(xioctl(device->fd, MEDIA_IOC_ENUM_ENTITIES, &desc) == -1) {
+                        errno_printerr("MEDIA_IOC_ENUM_ENTITIES");
+                        return -1;
+                }
+
+                if(strncmp(desc.name, driver_name, 32) == 0) {
+                        const uint32_t major = desc.dev.major;
+                        const uint32_t minor = desc.dev.minor;
+                        char path[256];
+                        int rc = snprintf(path, 256, "/dev/char/%u:%u", major, minor);
+
+                        return rc > 0 ? open(path, O_RDWR) : -1;
+                }
+        }
+
+        return -1;
+}
+
+static bool
+mp_xioctl(const MPDevice *device, const char *driver_name, unsigned long request, void *argp)
+{
+        int fd = mp_device_get_fd_by_name(device, driver_name);
+
+        if(fd < 0)
+        {
+                printf("ERROR: device with driver name %s not found\n", driver_name);
+        }
+
+        return fd >= 0 && xioctl(fd, request, argp) != -1;
 }
 
 MPDevice *
@@ -183,6 +225,42 @@ mp_device_setup_entity_link(MPDevice *device,
         return true;
 }
 
+void
+mp_device_setup_media_link(MPDevice *device,
+                           const struct mp_media_link_config *cfg,
+                           bool enable)
+{
+        const struct media_v2_entity *source_entity =
+                mp_device_find_entity(device, cfg->source_name);
+
+        const struct media_v2_entity *target_entity =
+                mp_device_find_entity(device, cfg->target_name);
+
+        mp_device_setup_entity_link(device,
+                                    source_entity->id,
+                                    target_entity->id,
+                                    cfg->source_port,
+                                    cfg->target_port,
+                                    enable);
+}
+
+void
+mp_device_setup_media_link_pad_crop(MPDevice *device,
+                                    const struct mp_media_crop_config *crop)
+{
+        struct v4l2_subdev_crop v4l2_crop = {};
+        v4l2_crop.pad = crop->pad;
+        v4l2_crop.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+        v4l2_crop.rect.top = crop->top;
+        v4l2_crop.rect.left = crop->left;
+        v4l2_crop.rect.width = crop->width;
+        v4l2_crop.rect.height = crop->height;
+
+        if(!mp_xioctl(device, crop->name, VIDIOC_SUBDEV_S_CROP, &v4l2_crop)) {
+                errno_printerr("VIDIOC_SUBDEV_S_CROP");
+        }
+}
+
 bool
 mp_device_setup_link(MPDevice *device,
                      uint32_t source_pad_id,
@@ -233,6 +311,46 @@ mp_entity_pad_set_format(MPDevice *device,
         }
 
         close(fd);
+
+        return true;
+}
+
+const struct media_v2_pad *
+mp_device_get_pad_at_index_from_entity(const MPDevice *device, uint32_t entity_id, uint32_t index)
+{
+        for (int i = 0; i < device->num_pads; ++i) {
+                if (device->pads[i].entity_id == entity_id && index-- == 0) {
+                        return &device->pads[i];
+                }
+        }
+        return NULL;
+}
+
+bool
+mp_device_setup_link_by_name(MPDevice *device,
+                             const char *source_entity_name,
+                             uint32_t source_pad_index,
+                             const char *sink_entity_name,
+                             uint32_t sink_pad_index,
+                             bool enabled)
+{
+        const struct media_v2_entity *source_entity =
+                mp_device_find_entity
+                (device, source_entity_name);
+        const struct media_v2_entity *sink_entity =
+                mp_device_find_entity
+                (device, sink_entity_name);
+
+        struct media_link_desc link = {};
+        link.flags = enabled ? MEDIA_LNK_FL_ENABLED : 0;
+        link.source.entity = source_entity->id;
+        link.source.index = source_pad_index;
+        link.sink.entity = sink_entity->id;
+        link.sink.index = sink_pad_index;
+        if (xioctl(device->fd, MEDIA_IOC_SETUP_LINK, &link) == -1) {
+                errno_printerr("MEDIA_IOC_SETUP_LINK");
+                return false;
+        }
 
         return true;
 }
