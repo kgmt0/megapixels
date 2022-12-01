@@ -184,6 +184,67 @@ config_ini_handler(void *user,
                                 ++cc->num_media_links;
                         }
                         g_strfreev(linkdefs);
+                } else if (strcmp(name, "media-formats") == 0) {
+                        struct mp_camera_config *cc = &cameras[index];
+                        char **formatdefs = g_strsplit(value, ",", 0);
+
+                        for (int i = 0; i < MP_MAX_FORMATS && formatdefs[i] != NULL;
+                             ++i) {
+                                char **entry = g_strsplit(formatdefs[i], ":", 5);
+                                char *name = entry[0];
+                                int pad = strtoint(entry[1], NULL, 10);
+                                char *format = entry[2];
+                                char *width = entry[3];
+                                char *height = entry[4];
+
+                                const size_t name_size =
+                                        sizeof(cc->media_formats[i].name);
+                                strncpy(cc->media_formats[i].name,
+                                        name,
+                                        name_size );
+
+                                cc->media_formats[i].pad = pad;
+
+                                cc->media_formats[i].mode.pixel_format =
+                                        mp_pixel_format_from_str(format);
+                                cc->media_formats[i].mode.width =
+                                        strtoint(width, NULL, 10);
+                                cc->media_formats[i].mode.height =
+                                        strtoint(height, NULL, 10);
+
+                                cc->num_media_formats++;
+
+                                g_strfreev(entry);
+                        }
+                } else if (strcmp(name, "media-crops") == 0) {
+                        char **formatdefs = g_strsplit(value, ",", 0);
+
+                        for (int i = 0; i < MP_MAX_CROPS && formatdefs[i] != NULL;
+                             ++i) {
+                                char **entry = g_strsplit(formatdefs[i], ":", 6);
+                                char *name = entry[0];
+                                int pad = strtoint(entry[1], NULL, 10);
+                                int top = strtoint(entry[2], NULL, 10);
+                                int left = strtoint(entry[3], NULL, 10);
+                                int width = strtoint(entry[4], NULL, 10);
+                                int height = strtoint(entry[5], NULL, 10);
+
+                                const size_t name_size =
+                                        sizeof(cc->media_crops[i].name);
+                                strncpy(cc->media_crops[i].name,
+                                        name,
+                                        name_size );
+
+                                cc->media_crops[i].pad = pad;
+                                cc->media_crops[i].top = top;
+                                cc->media_crops[i].left = left;
+                                cc->media_crops[i].width = width;
+                                cc->media_crops[i].height = height;
+
+                                cc->num_media_crops++;
+
+                                g_strfreev(entry);
+                        }
                 } else if (strcmp(name, "colormatrix") == 0) {
                         sscanf(value,
                                "%f,%f,%f,%f,%f,%f,%f,%f,%f",

@@ -7,12 +7,29 @@
 
 #define MP_MAX_CAMERAS 5
 #define MP_MAX_LINKS 10
+#define MP_MAX_FORMATS 10
+#define MP_MAX_CROPS 10
 
 struct mp_media_link_config {
         char source_name[100];
         char target_name[100];
         int source_port;
         int target_port;
+};
+
+struct mp_media_format_config {
+        char name[100];
+        int pad;
+        MPMode mode;
+};
+
+struct mp_media_crop_config {
+        char name[100];
+        int pad;
+        int left;
+        int top;
+        int width;
+        int height;
 };
 
 struct mp_camera_config {
@@ -29,6 +46,12 @@ struct mp_camera_config {
 
         struct mp_media_link_config media_links[MP_MAX_LINKS];
         int num_media_links;
+
+        struct mp_media_format_config media_formats[MP_MAX_FORMATS];
+        int num_media_formats;
+
+        struct mp_media_crop_config media_crops[MP_MAX_CROPS];
+        int num_media_crops;
 
         float colormatrix[9];
         float forwardmatrix[9];
