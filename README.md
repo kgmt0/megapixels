@@ -16,17 +16,17 @@ $ sudo ninja install
 
 # Config
 
-Megapixels checks multiple locations for it's configuration file and uses the first one it finds.
-As first step it will get the first compatible name in the device tree, in the case of a PinePhone
-this might be "pine64,pinephone-1.2". Then that dtname will be used as the filename in the search
+Megapixels checks multiple locations for its configuration file and uses the first one it finds.
+As a first step it will get the first compatible name in the device tree, in the case of a PinePhone
+this might be `pine64,pinephone-1.2`. Then that dtname will be used as the filename in the search
 path in this order:
 
-* $XDG_CONFIG_DIR/megapixels/config/$dtname.ini
-* ~/.config/megapixels/config/$dtname.ini
-* /etc/megapixels/config/$dtname.ini
-* /usr/share/megapixels/config/$dtname.ini
+* `$XDG_CONFIG_DIR/megapixels/config/$dtname.ini`
+* `~/.config/megapixels/config/$dtname.ini`
+* `/etc/megapixels/config/$dtname.ini`
+* `/usr/share/megapixels/config/$dtname.ini`
 
-The files in /usr/share/megapixels should be the config files distributed in this repository. The other
+The files in `/usr/share/megapixels` should be the config files distributed in this repository. The other
 locations allow the user or distribution to override config.
 
 ## Config file format
@@ -42,7 +42,7 @@ generated pictures.
 
 These are the sections describing the sensors.
 
-* `driver=ov5640` the name of the media node that provides the sensor and it's /dev/v4l-subdev* node.
+* `driver=ov5640` the name of the media node that provides the sensor and its `/dev/v4l-subdev*` node.
 * `media-driver=sun6i-csi` the name of the media node that has this camera in it.
 * `rotate=90` the rotation angle to make the sensor match the screen
 * `mirrored=true` whether the output is mirrored, useful for front-facing cameras
@@ -65,23 +65,23 @@ when previewing.
 # Post processing
 
 Megapixels only captures raw frames and stores .dng files. It captures a 5 frame burst and saves it to a temporary
-location. Then the postprocessing script is run which will generate the final .jpg file and writes it into the 
+location. Then the postprocessing script is run which will generate the final .jpg file and writes it into the
 pictures directory. Megapixels looks for the post processing script in the following locations:
 
-* ./postprocess.sh
-* $XDG_CONFIG_DIR/megapixels/postprocess.sh
-* ~/.config/megapixels/postprocess.sh
-* /etc/megapixels/postprocess.sh
-* /usr/share/megapixels/postprocess.sh
+* `./postprocess.sh`
+* `$XDG_CONFIG_DIR/megapixels/postprocess.sh`
+* `~/.config/megapixels/postprocess.sh`
+* `/etc/megapixels/postprocess.sh`
+* `/usr/share/megapixels/postprocess.sh`
 
-The bundled postprocess.sh script will copy the first frame of the burst into the picture directory as an DNG
-file and if dcraw and imagemagick are installed it will generate a JPG and also write that to the picture
-directory. It supports either the full dcraw or dcraw_emu from libraw.
+The bundled `postprocess.sh` script will copy the first frame of the burst into the picture directory as an DNG
+file. If dcraw and imagemagick are installed it will generate a JPG and also write that to the picture
+directory. It supports either the full `dcraw` or `dcraw_emu` from libraw.
 
-It is possible to write your own post processing pipeline my providing your own `postprocess.sh` script at
+It is possible to write your own post processing pipeline by providing your own `postprocess.sh` script at
 one of the above locations. The first argument to the script is the directory containing the temporary 
 burst files and the second argument is the final path for the image without an extension. For more details
-see postprocess.sh in this repository.
+see `postprocess.sh` in this repository.
 
 # Developing
 
@@ -94,10 +94,10 @@ Megapixels is developed at: https://gitlab.com/postmarketOS/megapixels
 * `main.c` contains the entry point and UI portion of the application.
 * `quickpreview.c` implements fast preview functionality, including debayering, color correction, rotation, etc.
 * `io_pipeline.c` implements all IO interaction with V4L2 devices in a separate thread to prevent blocking.
-* `process_pipeline.c` implements all process done on captured images, including launching post-processing
+* `process_pipeline.c` implements all process done on captured images, including launching post-processing.
 * `pipeline.c` Generic threaded message passing implementation based on glib, used to implement the pipelines.
-* `camera.c` V4L2 abstraction layer to make working with cameras easier
-* `device.c` V4L2 abstraction layer for devices
+* `camera.c` V4L2 abstraction layer to make working with cameras easier.
+* `device.c` V4L2 abstraction layer for devices.
 
 The primary image pipeline consists of the main application, the IO pipeline and
 the process pipeline. The main application sends commands to the IO pipeline,
@@ -111,15 +111,15 @@ Tests are located in `tests/`.
 
 All tools are contained in `tools/`
 
-* `list_devices` lists all V4L2 devices and their hardware layout
-* `camera_test` lists controls and video modes of a specific camera and tests capturing data from it
+* `list_devices` lists all V4L2 devices and their hardware layout.
+* `camera_test` lists controls and video modes of a specific camera and tests capturing data from it.
 
 ## Linux video subsystem 
 
 Most of the logic is contained inside `main.c`, but before we look at it, it is
 convenient to have some basic notions about the Linux video subsystem that
 Megapixels directly uses (instead of, for example, using a higher level
-framework such as "gstreamer", as other camera apps do).
+framework such as `gstreamer`, as other camera apps do).
 
 Typically, for "simple" video capture devices (such as some old webcams on a
 PC), the Linux kernel creates an entry on `/dev/` called `/dev/videoX` (where X
@@ -151,7 +151,7 @@ But there is more: in order to configure the properties of each sensor (example:
 capture frame rate, auto exposure, ...), instead of issuing `ioctl()` calls on
 `/dev/video1`, the Linux kernel (for this particular case) exposes two extra
 devices (`/dev/v4l-subdev0` for one sensor and `/dev/v4l-subdev1` for the other
-one)
+one).
 
 How does the user know that `/dev/v4l-subdev0`, `/dev/v4l-subdev1` and
 `/dev/video1` are related? Thanks to the "media subsystem": for "complex" cases
@@ -163,7 +163,7 @@ X can be `0`, `1`, ...) that can be used to...
 
 Pheeew.... let's recap what we have to far:
 
-* `/dev/mediaW` represents the "whole camera hardware"
+* `/dev/mediaW` represents the "whole camera hardware".
 * `/dev/videoX` is the "sensors interface" from where we will `read()` frames.
 * `/dev/vl4-subdevY` and `/dev/vl4-subdevZ` can be used to configure the
   sensors.
