@@ -60,6 +60,16 @@ entity_type_str(uint32_t type)
                 return "PROC_VIDEO_SCALER";
         case MEDIA_ENT_F_PROC_VIDEO_STATISTICS:
                 return "PROC_VIDEO_STATISTICS";
+        case MEDIA_ENT_F_PROC_VIDEO_ENCODER:
+                return "PROC_VIDEO_ENCODER";
+        case MEDIA_ENT_F_PROC_VIDEO_DECODER:
+                return "PROC_VIDEO_DECODER";
+        case MEDIA_ENT_F_PROC_VIDEO_ISP:
+                return "PROC_VIDEO_ISP";
+        case MEDIA_ENT_F_VID_MUX:
+                return "VID_MUX";
+        case MEDIA_ENT_F_VID_IF_BRIDGE:
+                return "VID_IF_BRIDGE";
         default:
                 return "invalid type";
         }
