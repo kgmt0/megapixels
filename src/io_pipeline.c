@@ -163,8 +163,15 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
                         exit(EXIT_FAILURE);
                 }
 
+                const struct media_v2_entity *bridge = mp_device_find_entity_type(
+                        info->device, MEDIA_ENT_F_VID_IF_BRIDGE);
+                if (!bridge) {
+                        g_printerr("Could not find device bridge entity\n");
+                        bridge = entity;
+                }
+
                 const struct media_v2_pad *pad =
-                        mp_device_get_pad_from_entity(info->device, entity->id);
+                        mp_device_get_pad_from_entity(info->device, bridge->id);
                 info->interface_pad_id = pad->id;
 
                 const struct media_v2_interface *interface =
