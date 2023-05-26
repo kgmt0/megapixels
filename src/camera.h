@@ -15,7 +15,7 @@ typedef struct {
 
 typedef struct _MPCamera MPCamera;
 
-MPCamera *mp_camera_new(int video_fd, int subdev_fd);
+MPCamera *mp_camera_new(int video_fd, int subdev_fd, int bridge_fd);
 void mp_camera_free(MPCamera *camera);
 
 void mp_camera_add_bg_task(MPCamera *camera, pid_t pid);

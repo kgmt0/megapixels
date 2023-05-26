@@ -115,7 +115,7 @@ main(int argc, char *argv[])
 
         printf("Opening the device took %fms\n", (open_end - find_end) * 1000);
 
-        MPCamera *camera = mp_camera_new(video_fd, subdev_fd);
+        MPCamera *camera = mp_camera_new(video_fd, subdev_fd, -1);
 
         MPControlList *controls = mp_camera_list_controls(camera);
 

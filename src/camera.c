@@ -39,6 +39,7 @@ struct video_buffer {
 struct _MPCamera {
         int video_fd;
         int subdev_fd;
+        int bridge_fd;
 
         bool has_set_mode;
         MPMode current_mode;
@@ -53,7 +54,7 @@ struct _MPCamera {
 };
 
 MPCamera *
-mp_camera_new(int video_fd, int subdev_fd)
+mp_camera_new(int video_fd, int subdev_fd, int bridge_fd)
 {
         g_return_val_if_fail(video_fd != -1, NULL);
 
@@ -76,6 +77,7 @@ mp_camera_new(int video_fd, int subdev_fd)
         MPCamera *camera = malloc(sizeof(MPCamera));
         camera->video_fd = video_fd;
         camera->subdev_fd = subdev_fd;
+        camera->bridge_fd = bridge_fd;
         camera->has_set_mode = false;
         camera->num_buffers = 0;
         camera->use_mplane = use_mplane;
@@ -289,6 +291,26 @@ mp_camera_set_mode(MPCamera *camera, MPMode *mode)
                 if (xioctl(camera->subdev_fd, VIDIOC_SUBDEV_S_FMT, &fmt) == -1) {
                         errno_printerr("VIDIOC_SUBDEV_S_FMT");
                         return false;
+                }
+
+                // sun6i-csi-bridge will return EINVAL when trying to read
+                // frames if the resolution it's configured with doesn't match
+                // the resolution of its input.
+                if (camera->bridge_fd > 0) {
+                        struct v4l2_subdev_format bridge_fmt = fmt;
+
+                        if (xioctl(camera->bridge_fd,
+                                   VIDIOC_SUBDEV_S_FMT,
+                                   &bridge_fmt) == -1) {
+                                errno_printerr("VIDIOC_SUBDEV_S_FMT");
+                                return false;
+                        }
+
+                        if (fmt.format.width != bridge_fmt.format.width ||
+                            fmt.format.height != bridge_fmt.format.height) {
+                                g_printerr("Bridge format resolution mismatch\n");
+                                return false;
+                        }
                 }
 
                 // Some drivers like ov5640 don't allow you to set the frame format

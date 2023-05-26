@@ -127,6 +127,32 @@ mp_setup_media_link_pad_formats(struct device_info *dev_info,
         }
 }
 
+static int
+get_bridge_fd(const MPDevice *device)
+{
+        const struct media_v2_entity *bridge =
+                mp_device_find_entity_type(device, MEDIA_ENT_F_VID_IF_BRIDGE);
+        if (!bridge) {
+                g_printerr("Could not find device bridge entity\n");
+                return -1;
+        }
+
+        const struct media_v2_interface *bridge_interface =
+                mp_device_find_entity_interface(device, bridge->id);
+        char dev_name[260];
+        if (!mp_find_device_path(bridge_interface->devnode, dev_name, 260)) {
+                g_printerr("Could not find bridge path\n");
+                return -1;
+        }
+
+        int bridge_fd = open(dev_name, O_RDWR);
+        if (bridge_fd == -1) {
+                g_printerr("Could not open %s: %s\n", dev_name, strerror(errno));
+        }
+
+        return bridge_fd;
+}
+
 static void
 setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
 {
@@ -235,7 +261,9 @@ setup_camera(MPDeviceList **device_list, const struct mp_camera_config *config)
                         exit(EXIT_FAILURE);
                 }
 
-                info->camera = mp_camera_new(dev_info->video_fd, info->fd);
+                int bridge_fd = get_bridge_fd(dev_info->device);
+                info->camera =
+                        mp_camera_new(dev_info->video_fd, info->fd, bridge_fd);
 
                 // Start with the capture format, this works around a bug with
                 // the ov5640 driver where it won't allow setting the preview
