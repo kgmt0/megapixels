@@ -44,7 +44,7 @@ main(int argc, char *argv[])
         uint32_t video_entity_id;
         {
                 const struct media_v2_entity *entity =
-                        mp_device_find_entity(device, video_name);
+                        mp_device_find_entity_type(device, MEDIA_ENT_F_IO_V4L);
                 if (!entity) {
                         printf("Unable to find video device interface\n");
                         return 1;
@@ -64,6 +64,28 @@ main(int argc, char *argv[])
                 video_fd = open(buf, O_RDWR);
                 if (video_fd == -1) {
                         printf("Unable to open video device\n");
+                        return 1;
+                }
+        }
+
+        int bridge_fd = -1;
+        const struct media_v2_entity *bridge =
+                mp_device_find_entity_type(device, MEDIA_ENT_F_VID_IF_BRIDGE);
+        if (bridge) {
+                video_entity_id = bridge->id;
+
+                const struct media_v2_interface *iface =
+                        mp_device_find_entity_interface(device, bridge->id);
+
+                char buf[256];
+                if (!mp_find_device_path(iface->devnode, buf, 256)) {
+                        printf("Unable to find bridge device path\n");
+                        return 1;
+                }
+
+                bridge_fd = open(buf, O_RDWR);
+                if (bridge_fd == -1) {
+                        printf("Unable to open bridge device\n");
                         return 1;
                 }
         }
@@ -115,7 +137,7 @@ main(int argc, char *argv[])
 
         printf("Opening the device took %fms\n", (open_end - find_end) * 1000);
 
-        MPCamera *camera = mp_camera_new(video_fd, subdev_fd, -1);
+        MPCamera *camera = mp_camera_new(video_fd, subdev_fd, bridge_fd);
 
         MPControlList *controls = mp_camera_list_controls(camera);
 
@@ -199,6 +221,8 @@ main(int argc, char *argv[])
         close(video_fd);
         if (subdev_fd != -1)
                 close(subdev_fd);
+        if (bridge_fd != -1)
+                close(bridge_fd);
 
         mp_device_close(device);
 
