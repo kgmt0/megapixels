@@ -26,6 +26,15 @@
 	<url type="homepage">https://sr.ht/~martijnbraam/megapixels</url>
 	<content_rating type="oars-1.1" />
 	<releases>
+		<release version="1.6.1" date="2023-05-30">
+			<description>
+				<p>
+					<li>Get the PinePhone cameras working with newer kernels (MR 31)</li>
+					<li>Increase capture-rate to 15 on pinephone (MR 29)</li>
+					<li>Increase burst minimum (MR 28)</li>
+				</p>
+			</description>
+		</release>
 		<release version="1.6.0" date="2022-11-30">
 			<description>
 				<p>
