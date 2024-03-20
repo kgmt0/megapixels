@@ -85,7 +85,7 @@ see `postprocess.sh` in this repository.
 
 # Developing
 
-Megapixels is developed at: https://gitlab.com/postmarketOS/megapixels
+Megapixels is developed at: https://gitlab.com/megapixels-org/Megapixels
 
 ## Source code organization
 
